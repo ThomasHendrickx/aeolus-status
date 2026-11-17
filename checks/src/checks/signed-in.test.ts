@@ -5,7 +5,8 @@ import { after, before, test } from 'node:test';
 
 import type { Context } from '../context.ts';
 import { evaluate } from '../engine.ts';
-import { closeSession } from '../session.ts';
+import { inOrder } from '../order.ts';
+import { closeSession, signInFresh } from '../session.ts';
 import { NotChecked } from '../types.ts';
 import { accountSignIn, aeolusApp, bridge, consoleOverview } from './signed-in.ts';
 
@@ -23,7 +24,10 @@ const html = (response: ServerResponse, body: string, status = 200): void => {
 };
 
 const tile = '<div data-testid="harbour-tile">a ship</div>';
-const world = { mail: true, consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${tile}</main>` };
+const probeTile = '<div data-testid="harbour-tile">probe-ship</div>';
+const shipPage = '<main><p data-testid="conversation-start">The start of your conversation with probe-ship</p></main>';
+const worldAtStart = () => ({ mail: true, consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
+const world = worldAtStart();
 let servers: Server[] = [];
 let env: Record<string, string> = {};
 const inbox: { id: string; text: string }[] = [];
@@ -44,11 +48,20 @@ before(async () => {
   });
   const gateway = await listen((_, response) => html(response, world.bridgePage));
   const consoleApp = await listen((_, response) => html(response, world.consolePage));
+  const fleet = await listen((_, response) => {
+    response.setHeader('content-type', 'application/json');
+    response.end('{"shipId":"shp_probe","fleetId":"flt_probe","name":"probe-ship"}');
+  });
   const app = await listen((request, response) => {
-    if (request.url === '/sign-in/start') {
+    const path = request.url?.split('?')[0];
+    if (path === '/sign-in/start') {
       html(response, '<button data-testid="sign-in-continue" onclick="location=\'/\'">Sign in</button>');
+    } else if (path === '/fleet') {
+      html(response, world.fleetPage);
+    } else if (path === '/conversations/shp_probe') {
+      html(response, world.shipPage);
     } else {
-      html(response, request.url === '/fleet' ? world.fleetPage : world.homePage);
+      html(response, world.homePage);
     }
   });
   const account = await listen((request, response) => {
@@ -67,8 +80,8 @@ before(async () => {
       html(response, 'no', 404);
     }
   });
-  servers = [mail.server, gateway.server, consoleApp.server, app.server, account.server];
-  env = { PROBE_MAIL_ADDRESS: PROBE, PROBE_MAIL_PASSWORD: 'p', MAIL_API: mail.origin, ACCOUNT_URL: account.origin, GATEWAY_URL: gateway.origin, APP_URL: app.origin, MAIL_WAIT_MS: '1500' };
+  servers = [mail.server, gateway.server, consoleApp.server, app.server, account.server, fleet.server];
+  env = { PROBE_MAIL_ADDRESS: PROBE, PROBE_MAIL_PASSWORD: 'p', MAIL_API: mail.origin, ACCOUNT_URL: account.origin, GATEWAY_URL: gateway.origin, APP_URL: app.origin, MAIL_WAIT_MS: '1500', FLEET_URL: fleet.origin, FLEET_PROBE_TOKEN: 'x' };
 });
 after(() => {
   for (const server of servers) {
@@ -81,13 +94,16 @@ function fresh(over: Record<string, string> = {}): Context {
 }
 async function run(check: Parameters<typeof evaluate>[0], context = fresh()): Promise<unknown> {
   try {
+    if ((check as { session?: string }).session === 'uses') {
+      await evaluate(accountSignIn, context, timing);
+    }
     return await evaluate(check as never, context, timing);
   } finally {
     await closeSession(context);
   }
 }
 function reset(): void {
-  Object.assign(world, { mail: true, consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${tile}</main>` });
+  Object.assign(world, worldAtStart());
   inbox.splice(0, inbox.length);
 }
 
@@ -109,7 +125,7 @@ test('a sign-in mail that never arrives is down for the sign-in, and the others 
   world.mail = false;
   const context = fresh();
   try {
-    assert.deepEqual(await evaluate(accountSignIn, context, timing), { state: 'down', detail: 'no sign-in mail arrived within 5 minutes' });
+    assert.deepEqual(await evaluate(accountSignIn, context, timing), { state: 'down', detail: 'no sign-in mail arrived in time' });
     assert.ok((await evaluate(consoleOverview, context, timing)) instanceof NotChecked);
   } finally {
     await closeSession(context);
@@ -135,6 +151,68 @@ test('a console that shows no ship is down; so is a fleet page with none', { tim
   reset();
   world.fleetPage = '<main data-testid="fleet"></main>';
   assert.deepEqual(await run(aeolusApp), { state: 'down', detail: 'the page shows no ship' });
+});
+
+test('an app whose fleet page shows other ships but not the probe own is down', { timeout: 120_000 }, async () => {
+  reset();
+  world.fleetPage = `<main data-testid="fleet">${tile}</main>`;
+  assert.deepEqual(await run(aeolusApp), { state: 'down', detail: 'the page does not show the probe\'s own ship' });
+});
+
+test('an app whose ship page crashes is down while the home and fleet pages work', { timeout: 120_000 }, async () => {
+  reset();
+  world.shipPage = '<main><h1>This page did not open</h1><button data-testid="page-did-not-open-try-again">Try again</button></main>';
+  assert.deepEqual(await run(aeolusApp), { state: 'down', detail: 'the page shows an error' });
+  reset();
+  world.shipPage = '<main><h1>Nothing here</h1></main>';
+  assert.deepEqual(await run(aeolusApp), { state: 'down', detail: 'the ship page does not show the ship' });
+});
+
+test('the signed-in page checks keep the 30 second default and use the session the sign-in opened', () => {
+  for (const check of [consoleOverview, bridge, aeolusApp]) {
+    assert.equal(check.timeoutMs, undefined);
+    assert.equal(check.session, 'uses');
+  }
+  assert.equal(accountSignIn.session, 'opens');
+  assert.ok((accountSignIn.timeoutMs ?? Infinity) <= 200_000);
+});
+
+test('a page check without a sign-in before it is not checked, and does not sign in itself', async () => {
+  reset();
+  const context = fresh();
+  try {
+    assert.ok((await evaluate(bridge, context, timing)) instanceof NotChecked);
+    assert.deepEqual(inbox, []);
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('a sign-in whose mail never comes stops when its time is up, not when the mail wait ends', { timeout: 30_000 }, async () => {
+  reset();
+  world.mail = false;
+  const context = fresh({ MAIL_WAIT_MS: '600000' });
+  const controller = new AbortController();
+  setTimeout(() => { controller.abort(); }, 1_500);
+  const started = Date.now();
+  try {
+    await assert.rejects(signInFresh(context, controller.signal));
+    assert.ok(Date.now() - started < 15_000);
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('checks that use the session start after the ones that open it, the rest at once', async () => {
+  const log: string[] = [];
+  const check = (slug: string, session?: 'opens' | 'uses') => ({ slug, session }) as never;
+  await inOrder([check('page-a', 'uses'), check('sign-in', 'opens'), check('plain')], async (item: { slug: string }) => {
+    log.push(`start ${item.slug}`);
+    await new Promise((done) => setTimeout(done, item.slug === 'sign-in' ? 50 : 1));
+    log.push(`end ${item.slug}`);
+  });
+  assert.ok(log.indexOf('end sign-in') < log.indexOf('start page-a'));
+  assert.ok(log.indexOf('start plain') < log.indexOf('end sign-in'));
 });
 
 test('without the probe mailbox nothing is checked', async () => {
