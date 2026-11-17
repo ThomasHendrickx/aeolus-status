@@ -39,7 +39,7 @@ async function signIn(context: Context, signal: AbortSignal): Promise<Session> {
     try {
       await page.goto(`${account}/sign-in`);
       await page.getByLabel('Email').fill(inbox.address);
-      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByRole('button', { name: 'Email me a link' }).click();
       await page.getByRole('heading', { name: 'Check your mail' }).waitFor();
     } catch {
       throw new Failure('the sign-in page did not take an email');
