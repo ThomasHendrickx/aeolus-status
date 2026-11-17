@@ -1,4 +1,4 @@
-import { type Check, Failure, type Outcome } from './types.ts';
+import { type Check, Failure, type Outcome, Unconfigured } from './types.ts';
 
 export const TIMEOUT_MS = 30_000;
 export const RETRY_DELAY_MS = 60_000;
@@ -28,6 +28,9 @@ export async function tryOnce<Context>(check: Check<Context>, context: Context, 
     ]);
     return { state: outcome.state, detail: publicDetail(outcome.detail) };
   } catch (error) {
+    if (error instanceof Unconfigured) {
+      throw error;
+    }
     if (timedOut) {
       return { state: 'down', detail: `no answer within ${String(timeoutMs / 1000)} seconds` };
     }
@@ -51,11 +54,18 @@ export const realTiming: Timing = {
 };
 
 /** Down only when two tries in a row, a minute apart, are down: one lost packet is not an incident. The second try's outcome stands. */
-export async function evaluate<Context>(check: Check<Context>, context: Context, timing: Timing = realTiming): Promise<Outcome> {
-  const first = await tryOnce(check, context, timing.timeoutMs);
-  if (first.state !== 'down') {
-    return first;
+export async function evaluate<Context>(check: Check<Context>, context: Context, timing: Timing = realTiming): Promise<Outcome | 'unconfigured'> {
+  try {
+    const first = await tryOnce(check, context, timing.timeoutMs);
+    if (first.state !== 'down') {
+      return first;
+    }
+    await timing.sleep(timing.retryDelayMs);
+    return await tryOnce(check, context, timing.timeoutMs);
+  } catch (error) {
+    if (error instanceof Unconfigured) {
+      return 'unconfigured';
+    }
+    throw error;
   }
-  await timing.sleep(timing.retryDelayMs);
-  return tryOnce(check, context, timing.timeoutMs);
 }

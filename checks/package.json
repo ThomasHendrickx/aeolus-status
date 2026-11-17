@@ -8,8 +8,7 @@
   },
   "scripts": {
     "test": "node --test \"src/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit",
-    "run": "node src/run.ts"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

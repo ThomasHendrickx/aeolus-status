@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { evaluate, publicDetail, tryOnce } from './engine.ts';
-import { type Check, Failure, type Outcome } from './types.ts';
+import { type Check, Failure, type Outcome, Unconfigured } from './types.ts';
 
 const fast = { timeoutMs: 50, retryDelayMs: 0, sleep: () => Promise.resolve() };
 
@@ -30,7 +30,7 @@ test('an up or degraded result is taken at the first try', async () => {
   assert.deepEqual(await evaluate(up.check, null, fast), { state: 'up', detail: 'ok' });
   assert.equal(up.calls(), 1);
   const slow = check({ state: 'degraded', detail: 'answered in 3 s' });
-  assert.equal((await evaluate(slow.check, null, fast)).state, 'degraded');
+  assert.deepEqual(await evaluate(slow.check, null, fast), { state: 'degraded', detail: 'answered in 3 s' });
   assert.equal(slow.calls(), 1);
 });
 
@@ -38,7 +38,7 @@ test('one down try is not down: the second try, a minute later, stands', async (
   const waits: number[] = [];
   const timing = { ...fast, retryDelayMs: 60_000, sleep: (ms: number) => { waits.push(ms); return Promise.resolve(); } };
   const lost = check(new Failure('answered 502'), { state: 'up', detail: 'ok' });
-  assert.equal((await evaluate(lost.check, null, timing)).state, 'up');
+  assert.deepEqual(await evaluate(lost.check, null, timing), { state: 'up', detail: 'ok' });
   assert.deepEqual(waits, [60_000]);
   const down = check(new Failure('answered 502'));
   assert.deepEqual(await evaluate(down.check, null, timing), { state: 'down', detail: 'answered 502' });
@@ -60,4 +60,10 @@ test('a detail that holds an id, an address, a link or a long token is withheld'
     assert.match(publicDetail(leak), /withheld/);
   }
   assert.equal(publicDetail('1 of 3 trierarchs not seen for 15 minutes'), '1 of 3 trierarchs not seen for 15 minutes');
+});
+
+test('a check whose secret is not set is not checked, and not tried again', async () => {
+  const unset = check(new Unconfigured('FLEET_PROBE_TOKEN'));
+  assert.equal(await evaluate(unset.check, null, fast), 'unconfigured');
+  assert.equal(unset.calls(), 1);
 });

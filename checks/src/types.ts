@@ -21,3 +21,6 @@ export interface Check<Context> {
   cadence: Cadence;
   run(context: Context, signal: AbortSignal): Promise<Outcome>;
 }
+
+/** Thrown when a secret the check needs is not set: nothing is checked and no issue changes. */
+export class Unconfigured extends Error {}

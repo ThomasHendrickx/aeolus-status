@@ -35,6 +35,9 @@ const context = realContext();
 const selected = checks.filter((check) => check.cadence === cadence);
 const results = await Promise.all(selected.map(async (check) => {
   const outcome = await evaluate(check, context);
+  if (outcome === 'unconfigured') {
+    return `${check.slug}: not checked, a secret it needs is not set`;
+  }
   const issue = github ? await syncIssue(github, check, outcome) : 'dry';
   return `${check.slug}: ${outcome.state}, ${outcome.detail} (issue ${issue})`;
 }));
