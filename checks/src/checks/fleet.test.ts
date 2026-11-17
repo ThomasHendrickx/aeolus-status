@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import type { Context } from '../context.ts';
 import type { ListedShip } from '../fleet.ts';
 import { evaluate, publicDetail } from '../engine.ts';
+import { NotChecked, Unconfigured } from '../types.ts';
 import { fleetList, fleetRoundTrip } from './fleet-core.ts';
 import { squadrons, trierarchs, watch } from './fleet-ships.ts';
 
@@ -48,7 +49,7 @@ const listing = (ships: ListedShip[]) => ({ '/fleet/list': () => ({ items: ships
 test('a check without the probe token is not checked', async () => {
   const ctx = context(listing(healthy()), { token: undefined });
   for (const check of [fleetList, fleetRoundTrip, trierarchs, squadrons, watch]) {
-    assert.equal(await evaluate(check, ctx, timing), 'unconfigured');
+    assert.ok((await evaluate(check, ctx, timing)) instanceof Unconfigured);
   }
   assert.deepEqual(ctx.seen, []);
 });
@@ -141,7 +142,7 @@ test('squadrons and the watch plugin: seen is up, not seen is down', async () =>
   assert.equal((await evaluate(watch, context(listing(healthy())), timing) as { state: string }).state, 'up');
   const without = healthy().filter((s) => s.type !== 'squadrons' && s.type !== 'watch');
   assert.deepEqual(await evaluate(squadrons, context(listing(without)), timing), { state: 'down', detail: 'squadrons not seen for 15 minutes' });
-  assert.deepEqual(await evaluate(watch, context(listing(without)), timing), { state: 'down', detail: 'the watch plugin not seen for 15 minutes' });
+  assert.deepEqual(await evaluate(watch, context(listing(without)), timing), new NotChecked('not connected'));
   const stale = healthy().map((s) => (s.type === 'watch' ? { ...s, lastSeenAt: ago(30) } : s));
   assert.equal((await evaluate(watch, context(listing(stale)), timing) as { state: string }).state, 'down');
 });

@@ -1,6 +1,6 @@
 import type { Context } from '../context.ts';
 import { type ListedShip, minutesSince, probe } from '../fleet.ts';
-import { type Check, Failure, type Outcome } from '../types.ts';
+import { type Check, Failure, NotChecked, type Outcome } from '../types.ts';
 
 /** How long a ship may go unseen, and a crew request unassigned, before it counts: 15 minutes, as the design says. */
 export const SEEN_MINUTES = 15;
@@ -44,8 +44,8 @@ export const trierarchs: Check<Context> = {
   },
 };
 
-/** A plugin ship of a type, seen within 15 minutes: down when it is not. */
-function pluginSeen(name: string, slug: string, what: string, typeFrom: (context: Context) => string): Check<Context> {
+/** A plugin ship of a type, seen within 15 minutes: down when it is not. An optional plugin none is commissioned for is not checked. */
+function pluginSeen(name: string, slug: string, what: string, typeFrom: (context: Context) => string, isOptional = false): Check<Context> {
   return {
     name,
     slug,
@@ -54,6 +54,9 @@ function pluginSeen(name: string, slug: string, what: string, typeFrom: (context
       const ships = await probe(context, signal).list();
       readable(ships);
       const type = typeFrom(context);
+      if (isOptional && !ships.some((ship) => ship.type === type && ship.status !== 'retired')) {
+        throw new NotChecked('not connected');
+      }
       const seen = ships.some((ship) => ship.type === type && ship.status !== 'retired' && minutesSince(context, ship.lastSeenAt) <= SEEN_MINUTES);
       return seen ? { state: 'up', detail: `${what} seen` } : { state: 'down', detail: `${what} not seen for ${String(SEEN_MINUTES)} minutes` };
     },
@@ -62,5 +65,5 @@ function pluginSeen(name: string, slug: string, what: string, typeFrom: (context
 
 export const squadrons = pluginSeen('squadrons', 'check-squadrons', 'squadrons', () => 'squadrons');
 
-/** The watch plugin's ship type is WATCH_PLUGIN_TYPE, "watch" when unset. */
-export const watch = pluginSeen('Watch plugin', 'check-watch', 'the watch plugin', (context) => context.env.WATCH_PLUGIN_TYPE ?? 'watch');
+/** The watch plugin's ship type is WATCH_PLUGIN_TYPE, "watch" when unset. Production has none commissioned yet: until one is, the row is not checked. */
+export const watch = pluginSeen('Watch plugin', 'check-watch', 'the watch plugin', (context) => context.env.WATCH_PLUGIN_TYPE ?? 'watch', true);
