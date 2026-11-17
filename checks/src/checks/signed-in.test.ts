@@ -31,11 +31,15 @@ const world = worldAtStart();
 let servers: Server[] = [];
 let env: Record<string, string> = {};
 const inbox: { id: string; text: string }[] = [];
+let mailThrottled = 0;
 
 before(async () => {
   const mail = await listen((request, response) => {
     response.setHeader('content-type', 'application/json');
-    if (request.method === 'POST') {
+    if (request.method !== 'POST' && mailThrottled > 0) {
+      mailThrottled -= 1;
+      response.writeHead(429).end();
+    } else if (request.method === 'POST') {
       response.end('{"token":"t"}');
     } else if (request.method === 'DELETE') {
       inbox.splice(0, inbox.length);
@@ -117,6 +121,16 @@ test('with everything healthy the sign-in, console, Bridge and app are up', { ti
     assert.deepEqual(await evaluate(aeolusApp, context, timing), { state: 'up', detail: 'the app loads' });
   } finally {
     await closeSession(context);
+  }
+});
+
+test('a probe mailbox that answers 429 a few times is waited for, and the sign-in is up', { timeout: 120_000 }, async () => {
+  reset();
+  mailThrottled = 3;
+  try {
+    assert.deepEqual(await run(accountSignIn, fresh({ MAIL_BACKOFF_MS: '20' })), { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' });
+  } finally {
+    mailThrottled = 0;
   }
 });
 
