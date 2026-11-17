@@ -8,7 +8,7 @@ import { realContext } from './context.ts';
 import { evaluate } from './engine.ts';
 import { type Github, syncIssue } from './issues.ts';
 import { checks } from './registry.ts';
-import type { Cadence } from './types.ts';
+import { type Cadence, NotChecked, Unconfigured } from './types.ts';
 
 const cadence = process.argv[2] as Cadence | undefined;
 const dry = process.argv.includes('--dry');
@@ -35,8 +35,8 @@ const context = realContext();
 const selected = checks.filter((check) => check.cadence === cadence);
 const results = await Promise.all(selected.map(async (check) => {
   const outcome = await evaluate(check, context);
-  if (outcome === 'unconfigured') {
-    return `${check.slug}: not checked, a secret it needs is not set`;
+  if (outcome instanceof NotChecked) {
+    return `${check.slug}: not checked, ${outcome instanceof Unconfigured ? 'a secret it needs is not set' : outcome.message}`;
   }
   const issue = github ? await syncIssue(github, check, outcome) : 'dry';
   return `${check.slug}: ${outcome.state}, ${outcome.detail} (issue ${issue})`;

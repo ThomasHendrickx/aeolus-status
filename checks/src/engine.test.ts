@@ -64,6 +64,6 @@ test('a detail that holds an id, an address, a link or a long token is withheld'
 
 test('a check whose secret is not set is not checked, and not tried again', async () => {
   const unset = check(new Unconfigured('FLEET_PROBE_TOKEN'));
-  assert.equal(await evaluate(unset.check, null, fast), 'unconfigured');
+  assert.ok((await evaluate(unset.check, null, fast)) instanceof Unconfigured);
   assert.equal(unset.calls(), 1);
 });

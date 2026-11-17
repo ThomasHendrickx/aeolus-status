@@ -1,4 +1,4 @@
-import { type Check, Failure, type Outcome, Unconfigured } from './types.ts';
+import { type Check, Failure, NotChecked, type Outcome } from './types.ts';
 
 export const TIMEOUT_MS = 30_000;
 export const RETRY_DELAY_MS = 60_000;
@@ -28,7 +28,7 @@ export async function tryOnce<Context>(check: Check<Context>, context: Context, 
     ]);
     return { state: outcome.state, detail: publicDetail(outcome.detail) };
   } catch (error) {
-    if (error instanceof Unconfigured) {
+    if (error instanceof NotChecked) {
       throw error;
     }
     if (timedOut) {
@@ -54,7 +54,7 @@ export const realTiming: Timing = {
 };
 
 /** Down only when two tries in a row, a minute apart, are down: one lost packet is not an incident. The second try's outcome stands. */
-export async function evaluate<Context>(check: Check<Context>, context: Context, timing: Timing = realTiming): Promise<Outcome | 'unconfigured'> {
+export async function evaluate<Context>(check: Check<Context>, context: Context, timing: Timing = realTiming): Promise<Outcome | NotChecked> {
   try {
     const first = await tryOnce(check, context, timing.timeoutMs);
     if (first.state !== 'down') {
@@ -63,8 +63,8 @@ export async function evaluate<Context>(check: Check<Context>, context: Context,
     await timing.sleep(timing.retryDelayMs);
     return await tryOnce(check, context, timing.timeoutMs);
   } catch (error) {
-    if (error instanceof Unconfigured) {
-      return 'unconfigured';
+    if (error instanceof NotChecked) {
+      return error;
     }
     throw error;
   }

@@ -22,5 +22,8 @@ export interface Check<Context> {
   run(context: Context, signal: AbortSignal): Promise<Outcome>;
 }
 
-/** Thrown when a secret the check needs is not set: nothing is checked and no issue changes. */
-export class Unconfigured extends Error {}
+/** Thrown when a check cannot be made for a reason that is not its part's fault: nothing is reported and no issue changes. The message says why, publicly. */
+export class NotChecked extends Error {}
+
+/** A secret the check needs is not set. */
+export class Unconfigured extends NotChecked {}
