@@ -1,0 +1,4 @@
+# The status page package is unpacked here at build time; only its lockfile is kept.
+*
+!.gitignore
+!package-lock.json

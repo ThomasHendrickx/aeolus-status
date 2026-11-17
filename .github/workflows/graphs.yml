@@ -1,0 +1,25 @@
+# Pinned by hand: no workflow regenerates these files.
+name: Graphs CI
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.repository }}-upptime
+  cancel-in-progress: false
+permissions:
+  contents: write
+  issues: write
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "20.20.2"
+      - uses: upptime/uptime-monitor@74f0683383384927e064d76a5f21f340d6af36fc # v1.46.5
+        with:
+          command: "graphs"
+        env:
+          GH_PAT: ${{ github.token }}

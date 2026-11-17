@@ -1,0 +1,56 @@
+# Pinned by hand: the status page package by version and checksum, its dependencies by site/package-lock.json.
+name: Static Site CI
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".upptimerc.yml"
+      - "site/**"
+      - ".github/workflows/site.yml"
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.repository }}-site
+  cancel-in-progress: false
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+env:
+  STATUS_PAGE_VERSION: "1.17.0"
+  STATUS_PAGE_SHA256: "6418b8384e51a8cf06f8e9acd0e66975a5410d95fceb7b41520c259b45bdb069"
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "20.20.2"
+      - name: Unpack the status page package
+        working-directory: site
+        run: |
+          curl -fsSLo status-page.tgz "https://registry.npmjs.org/@upptime/status-page/-/status-page-${STATUS_PAGE_VERSION}.tgz"
+          echo "${STATUS_PAGE_SHA256}  status-page.tgz" | sha256sum -c -
+          tar xzf status-page.tgz --strip-components=1
+          rm status-page.tgz
+      - name: Build the page
+        working-directory: site
+        env:
+          CYPRESS_INSTALL_BINARY: "0"
+        run: |
+          npm ci --no-audit --no-fund
+          npm run export
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/__sapper__/export
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

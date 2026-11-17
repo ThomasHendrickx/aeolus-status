@@ -1,0 +1,47 @@
+owner: ThomasHendrickx
+repo: aeolus-status
+
+# Each check is a public URL anyone can reach.
+sites:
+  - name: Fleet
+    url: https://fleet.aeolus-fleet.dev/health # public URL; privacy-guard: allow ssh-alias
+    expectedStatusCodes: [200]
+    __dangerous__body_down_if_regex_missing: '^(?=[\s\S]*"web":"up")(?=[\s\S]*"server":"up")(?=[\s\S]*"database":"up")'
+  - name: Fleet versions
+    url: https://fleet.aeolus-fleet.dev/version # public URL; privacy-guard: allow ssh-alias
+    expectedStatusCodes: [200]
+  - name: Account
+    url: https://account.aeolus-fleet.dev/sign-in
+    expectedStatusCodes: [200]
+  - name: Gateway
+    url: https://gateway.aeolus-fleet.dev/api/health
+    expectedStatusCodes: [200]
+  - name: Aeolus app
+    url: https://app.aeolus-fleet.dev/health
+    expectedStatusCodes: [200]
+  - name: Site
+    url: https://aeolus-fleet.dev
+    expectedStatusCodes: [200]
+  - name: Site (.com)
+    url: https://aeolus-fleet.com
+    expectedStatusCodes: [200]
+
+assignees:
+  - ThomasHendrickx
+
+skipDescriptionUpdate: true
+skipTopicsUpdate: true
+skipHomepageUpdate: true
+
+status-website:
+  cname: status.aeolus-fleet.dev
+  name: Aeolus status
+  introTitle: "**Aeolus status**"
+  introMessage: Whether the Aeolus fleet works now. Checked every 5 minutes from GitHub Actions, outside production.
+  navbar:
+    - title: Status
+      href: /
+    - title: Incidents
+      href: https://github.com/$OWNER/$REPO/issues?q=label%3Astatus
+    - title: GitHub
+      href: https://github.com/$OWNER/$REPO

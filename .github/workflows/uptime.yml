@@ -1,0 +1,23 @@
+# Pinned by hand: no workflow regenerates these files.
+name: Uptime CI
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.repository }}-upptime
+  cancel-in-progress: false
+permissions:
+  contents: write
+  issues: write
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: upptime/uptime-monitor@74f0683383384927e064d76a5f21f340d6af36fc # v1.46.5
+        with:
+          command: "update"
+        env:
+          GH_PAT: ${{ github.token }}
+          FLEET_PROBE_TOKEN: ${{ secrets.FLEET_PROBE_TOKEN }}
