@@ -25,10 +25,10 @@ const page = (head = ''): string => `<!doctype html><head><link rel="icon" href=
 const env = (name: string, origin: string): Context => ({ env: { [name]: origin }, fetch, now: () => Date.now() });
 
 test('a page that loads with its icon is up', async () => {
-  const { origin, server } = await serve({ '/': { body: page() }, '/icon.png': { type: 'image/png', body: 'x' } });
+  const { origin, server } = await serve({ '/': { body: page() }, '/sign-in': { body: page() }, '/icon.png': { type: 'image/png', body: 'x' } });
   try {
     assert.deepEqual(await evaluate(siteDev, env('SITE_URL', `${origin}/`), timing), { state: 'up', detail: 'the site loads' });
-    assert.deepEqual(await evaluate(accountPage, env('ACCOUNT_URL', `${origin}/`), timing), { state: 'up', detail: 'the sign-in page loads' });
+    assert.deepEqual(await evaluate(accountPage, env('ACCOUNT_URL', origin), timing), { state: 'up', detail: 'the sign-in page loads' });
     assert.equal((await evaluate(siteCom, env('SITE_COM_URL', `${origin}/`), timing) as { state: string }).state, 'up');
   } finally {
     server.close();
@@ -40,6 +40,15 @@ test('a page whose icon or script is not served is down, with a count and no add
   try {
     const outcome = await evaluate(siteDev, env('SITE_URL', `${origin}/`), timing);
     assert.deepEqual(outcome, { state: 'down', detail: '2 assets of the page failed to load' });
+  } finally {
+    server.close();
+  }
+});
+
+test('a working account root with a broken /sign-in is down', async () => {
+  const { origin, server } = await serve({ '/': { body: page() }, '/sign-in': { status: 500, body: page() }, '/icon.png': { type: 'image/png', body: 'x' } });
+  try {
+    assert.equal((await evaluate(accountPage, env('ACCOUNT_URL', origin), timing) as { state: string }).state, 'down');
   } finally {
     server.close();
   }
