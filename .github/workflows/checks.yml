@@ -35,6 +35,7 @@ jobs:
           cache: npm
           cache-dependency-path: checks/package-lock.json
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - run: node src/run.ts "$CADENCE"
         env:
           GITHUB_TOKEN: ${{ github.token }}
