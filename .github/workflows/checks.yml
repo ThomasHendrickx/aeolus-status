@@ -38,3 +38,4 @@ jobs:
       - run: node src/run.ts "$CADENCE"
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          FLEET_PROBE_TOKEN: ${{ secrets.FLEET_PROBE_TOKEN }}
