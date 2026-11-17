@@ -2,11 +2,12 @@ import type { Page } from 'playwright';
 
 import { loadWithAssets, PAGE_BUDGET_MS } from '../browser.ts';
 import type { Context } from '../context.ts';
-import { session, sessionOrNotChecked, urlOf } from '../session.ts';
+import { probe } from '../fleet.ts';
+import { sessionOrNotChecked, signInFresh, urlOf } from '../session.ts';
 import { type Check, Failure, type Outcome } from '../types.ts';
 
-/** A signed-in check waits for the run's sign-in, which can take minutes (the mail), so its try may take longer than 30 seconds. */
-const TIMEOUT_MS = 480_000;
+/** The sign-in check's try: its mail may take up to 2.5 minutes (over 2 is degraded), and the page steps on each side of it 20 seconds. The checks that use the session keep the 30 seconds. */
+const SIGN_IN_TIMEOUT_MS = 200_000;
 
 const SIGN_IN_MAIL_SLOW_MS = 120_000;
 
@@ -41,6 +42,20 @@ async function shipsShown(page: Page): Promise<void> {
   }
 }
 
+/** A fresh page in the run's signed-in session, closed when the check ends or its time is up. */
+async function inSession<T>(context: Context, signal: AbortSignal, run: (page: Page) => Promise<T>): Promise<T> {
+  const page = await sessionOrNotChecked(context).context.newPage();
+  const close = (): void => void page.close().catch(() => undefined);
+  signal.addEventListener('abort', close);
+  try {
+    page.setDefaultTimeout(20_000);
+    return await run(page);
+  } finally {
+    signal.removeEventListener('abort', close);
+    await page.close().catch(() => undefined);
+  }
+}
+
 function verdict(took: number, what: string): Outcome {
   return took > PAGE_BUDGET_MS ? { state: 'degraded', detail: `${what} took ${String(Math.round(took / 100) / 10)} s to load` } : { state: 'up', detail: `${what} loads` };
 }
@@ -50,9 +65,10 @@ export const accountSignIn: Check<Context> = {
   name: 'Account: sign-in by mail',
   slug: 'check-account-sign-in',
   cadence: 'fifteen',
-  timeoutMs: 360_000,
-  async run(context) {
-    const { mailMs } = await session(context);
+  timeoutMs: SIGN_IN_TIMEOUT_MS,
+  session: 'opens',
+  async run(context, signal) {
+    const { mailMs } = await signInFresh(context, signal);
     return mailMs > SIGN_IN_MAIL_SLOW_MS
       ? { state: 'degraded', detail: `the sign-in mail took ${String(Math.round(mailMs / 6_000) / 10)} minutes` }
       : { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' };
@@ -64,26 +80,19 @@ export const consoleOverview: Check<Context> = {
   name: 'Console: signed-in overview',
   slug: 'check-console',
   cadence: 'fifteen',
-  timeoutMs: TIMEOUT_MS,
-  async run(context) {
-    const { context: browserContext } = await sessionOrNotChecked(context);
-    const page = await browserContext.newPage();
+  session: 'uses',
+  run: (context, signal) => inSession(context, signal, async (page) => {
     try {
-      page.setDefaultTimeout(20_000);
-      try {
-        await page.goto(`${urlOf(context, 'account')}/organisation/fleets`);
-        await page.getByRole('button', { name: 'Open in console' }).click();
-        await page.waitForURL((url) => url.pathname === '/' && url.origin !== new URL(urlOf(context, 'account')).origin);
-      } catch {
-        throw new Failure('the account app did not open the console');
-      }
-      const took = await openSigned(page, page.url());
-      await shipsShown(page);
-      return verdict(took, 'the console');
-    } finally {
-      await page.close();
+      await page.goto(`${urlOf(context, 'account')}/organisation/fleets`);
+      await page.getByRole('button', { name: 'Open in console' }).click();
+      await page.waitForURL((url) => url.pathname === '/' && url.origin !== new URL(urlOf(context, 'account')).origin);
+    } catch {
+      throw new Failure('the account app did not open the console');
     }
-  },
+    const took = await openSigned(page, page.url());
+    await shipsShown(page);
+    return verdict(took, 'the console');
+  }),
 };
 
 /** Gateway and Bridge, 2: signed in, Bridge's first page loads without an error. */
@@ -91,45 +100,42 @@ export const bridge: Check<Context> = {
   name: 'Bridge: signed-in first page',
   slug: 'check-bridge',
   cadence: 'fifteen',
-  timeoutMs: TIMEOUT_MS,
-  async run(context) {
-    const { context: browserContext } = await sessionOrNotChecked(context);
-    const page = await browserContext.newPage();
-    try {
-      page.setDefaultTimeout(20_000);
-      const took = await openSigned(page, `${urlOf(context, 'gateway')}/bridge`);
-      return verdict(took, 'Bridge');
-    } finally {
-      await page.close();
-    }
-  },
+  session: 'uses',
+  run: (context, signal) => inSession(context, signal, async (page) => verdict(await openSigned(page, `${urlOf(context, 'gateway')}/bridge`), 'Bridge')),
 };
 
-/** Aeolus app: signed in, the home page and the fleet page load, with no error boundary, no script error and a ship shown. */
+/** Aeolus app: signed in, the home page, the fleet page and the probe's own ship's page load, with no error boundary and no script error, and the probe's own ship shown. */
 export const aeolusApp: Check<Context> = {
   name: 'Aeolus app: signed-in pages',
   slug: 'check-app',
   cadence: 'fifteen',
-  timeoutMs: TIMEOUT_MS,
-  async run(context) {
-    const { context: browserContext } = await sessionOrNotChecked(context);
-    const page = await browserContext.newPage();
-    try {
-      page.setDefaultTimeout(20_000);
-      const app = urlOf(context, 'app');
-      try {
-        await page.goto(`${app}/sign-in/start`);
-        await page.getByTestId('sign-in-continue').click();
-        await page.waitForURL((url) => url.origin === new URL(app).origin && !url.pathname.startsWith('/sign-in'));
-      } catch {
-        throw new Failure('the app did not sign the probe in');
-      }
-      const home = await openSigned(page, `${app}/`);
-      const fleet = await openSigned(page, `${app}/fleet`);
-      await shipsShown(page);
-      return verdict(Math.max(home, fleet), 'the app');
-    } finally {
-      await page.close();
+  session: 'uses',
+  run: (context, signal) => inSession(context, signal, async (page) => {
+    const app = urlOf(context, 'app');
+    const me = (await probe(context, signal).call('GET', '/ship/whoami')) as { shipId?: string; name?: string };
+    if (!me.shipId || !me.name) {
+      throw new Failure('the probe could not be identified');
     }
-  },
+    try {
+      await page.goto(`${app}/sign-in/start`);
+      await page.getByTestId('sign-in-continue').click();
+      await page.waitForURL((url) => url.origin === new URL(app).origin && !url.pathname.startsWith('/sign-in'));
+    } catch {
+      throw new Failure('the app did not sign the probe in');
+    }
+    const home = await openSigned(page, `${app}/`);
+    const fleet = await openSigned(page, `${app}/fleet`);
+    await shipsShown(page);
+    if (!(await page.getByTestId('harbour-tile').filter({ hasText: me.name }).first().isVisible())) {
+      throw new Failure('the page does not show the probe\'s own ship');
+    }
+    const shipUrl = new URL(`/conversations/${encodeURIComponent(me.shipId)}`, page.url());
+    shipUrl.search = new URL(page.url()).search;
+    shipUrl.searchParams.set('name', me.name);
+    const ship = await openSigned(page, shipUrl.toString());
+    if (!(await page.getByText(me.name).first().isVisible())) {
+      throw new Failure('the ship page does not show the ship');
+    }
+    return verdict(Math.max(home, fleet, ship), 'the app');
+  }),
 };

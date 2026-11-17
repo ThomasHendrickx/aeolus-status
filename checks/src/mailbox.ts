@@ -2,7 +2,7 @@ import type { Context } from './context.ts';
 import { Failure, Unconfigured } from './types.ts';
 
 const DEFAULT_MAIL_API = 'https://api.mail.tm';
-const MAIL_WAIT_MS = 300_000;
+const MAIL_WAIT_MS = 150_000;
 const POLL_MS = 3_000;
 
 interface Message {
@@ -13,7 +13,7 @@ interface Message {
 export function mailbox(context: Context): {
   address: string;
   purge(): Promise<void>;
-  waitForLink(origin: string): Promise<string>;
+  waitForLink(origin: string, signal: AbortSignal): Promise<string>;
 } {
   const { PROBE_MAIL_ADDRESS: address, PROBE_MAIL_PASSWORD: password, MAIL_API: api = DEFAULT_MAIL_API } = context.env;
   if (!address || !password) {
@@ -46,10 +46,10 @@ export function mailbox(context: Context): {
         await call('DELETE', `/messages/${message.id}`);
       }
     },
-    /** The first link on the account's own origin in the next mail, read and deleted; fails when none arrives within 5 minutes. */
-    async waitForLink(origin) {
+    /** The first link on the account's own origin in the next mail, read and deleted; fails when none arrives in time (2.5 minutes) or the signal aborts. */
+    async waitForLink(origin, signal) {
       const deadline = context.now() + Number(context.env.MAIL_WAIT_MS ?? MAIL_WAIT_MS);
-      while (context.now() < deadline) {
+      while (context.now() < deadline && !signal.aborted) {
         const [message] = await messages();
         if (message) {
           const full = (await call('GET', `/messages/${message.id}`)) as { text?: string; html?: string[] };
@@ -63,7 +63,7 @@ export function mailbox(context: Context): {
         }
         await new Promise((done) => setTimeout(done, POLL_MS));
       }
-      throw new Failure('no sign-in mail arrived within 5 minutes');
+      throw new Failure('no sign-in mail arrived in time');
     },
   };
 }

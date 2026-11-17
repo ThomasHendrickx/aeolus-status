@@ -2,7 +2,7 @@ import { type Browser, type BrowserContext, chromium } from 'playwright';
 
 import type { Context } from './context.ts';
 import { mailbox } from './mailbox.ts';
-import { Failure, NotChecked, Unconfigured } from './types.ts';
+import { Failure, NotChecked } from './types.ts';
 
 export const URLS = {
   account: 'https://account.aeolus-fleet.dev',
@@ -14,7 +14,7 @@ export function urlOf(context: Context, name: keyof typeof URLS): string {
   return context.env[`${name.toUpperCase()}_URL`] ?? URLS[name];
 }
 
-/** The probe account signed in once per run, shared by the checks that need it: they read pages of their own in this one browser context. */
+/** The probe account signed in once per run, shared by the checks that use it: they read pages of their own in this one browser context. */
 export interface Session {
   browser: Browser;
   context: BrowserContext;
@@ -22,13 +22,15 @@ export interface Session {
   mailMs: number;
 }
 
-const sessions = new WeakMap<Context, Promise<Session>>();
+const sessions = new WeakMap<Context, Session>();
 
-/** Signs in as a person does: asks for a link on the account app's sign-in page, reads it from the probe mailbox, opens it. */
-async function signIn(context: Context): Promise<Session> {
+/** Signs in as a person does: asks for a link on the account app's sign-in page, reads it from the probe mailbox, opens it. Stops when the signal aborts. */
+async function signIn(context: Context, signal: AbortSignal): Promise<Session> {
   const inbox = mailbox(context);
   const account = urlOf(context, 'account');
   const browser = await chromium.launch();
+  const close = (): void => void browser.close().catch(() => undefined);
+  signal.addEventListener('abort', close);
   try {
     const browserContext = await browser.newContext();
     const page = await browserContext.newPage();
@@ -43,7 +45,7 @@ async function signIn(context: Context): Promise<Session> {
       throw new Failure('the sign-in page did not take an email');
     }
     const asked = context.now();
-    const link = await inbox.waitForLink(new URL(account).origin);
+    const link = await inbox.waitForLink(new URL(account).origin, signal);
     const mailMs = context.now() - asked;
     try {
       await page.goto(link);
@@ -52,35 +54,34 @@ async function signIn(context: Context): Promise<Session> {
       throw new Failure('the sign-in link did not sign in');
     }
     await page.close();
+    signal.removeEventListener('abort', close);
     return { browser, context: browserContext, mailMs };
   } catch (error) {
+    signal.removeEventListener('abort', close);
     await browser.close().catch(() => undefined);
     throw error;
   }
 }
 
-/** The run's signed-in session. A failed sign-in is not kept, so the next try signs in again. */
-export function session(context: Context): Promise<Session> {
-  let opened = sessions.get(context);
-  if (!opened) {
-    opened = signIn(context);
-    sessions.set(context, opened);
-    opened.catch(() => sessions.delete(context));
-  }
+/** Signs the probe in anew and keeps the session for the checks that use it, closing the one before. A failed sign-in keeps none. */
+export async function signInFresh(context: Context, signal: AbortSignal): Promise<Session> {
+  await closeSession(context);
+  const opened = await signIn(context, signal);
+  sessions.set(context, opened);
   return opened;
 }
 
-/** For a check that needs the session but is not the sign-in's: a failed sign-in is the sign-in check's to report, so this one is not checked. */
-export async function sessionOrNotChecked(context: Context): Promise<Session> {
-  try {
-    return await session(context);
-  } catch (error) {
-    throw error instanceof Unconfigured || error instanceof NotChecked ? error : new NotChecked('the probe could not sign in, see the sign-in check');
+/** For a check that uses the session but did not open it: without one the sign-in check's failure stands for it, so this one is not checked. */
+export function sessionOrNotChecked(context: Context): Session {
+  const opened = sessions.get(context);
+  if (!opened) {
+    throw new NotChecked('the probe is not signed in, see the sign-in check');
   }
+  return opened;
 }
 
 export async function closeSession(context: Context): Promise<void> {
   const opened = sessions.get(context);
   sessions.delete(context);
-  await opened?.then((open) => open.browser.close()).catch(() => undefined);
+  await opened?.browser.close().catch(() => undefined);
 }

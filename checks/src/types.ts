@@ -21,6 +21,8 @@ export interface Check<Context> {
   cadence: Cadence;
   /** How long one try may take before it counts as no answer: 30 seconds unless the check says. */
   timeoutMs?: number;
+  /** `opens` signs the probe account in and keeps the session; `uses` reads pages in that session, so it runs after the one that opens it. */
+  session?: 'opens' | 'uses';
   run(context: Context, signal: AbortSignal): Promise<Outcome>;
 }
 

@@ -7,6 +7,7 @@
 import { realContext } from './context.ts';
 import { evaluate } from './engine.ts';
 import { type Github, syncIssue } from './issues.ts';
+import { inOrder } from './order.ts';
 import { closeSession } from './session.ts';
 import { checks } from './registry.ts';
 import { type Cadence, NotChecked, Unconfigured } from './types.ts';
@@ -34,13 +35,13 @@ if (!dry && !github) {
 
 const context = realContext();
 const selected = checks.filter((check) => check.cadence === cadence);
-const results = await Promise.all(selected.map(async (check) => {
+const results = await inOrder(selected, async (check) => {
   const outcome = await evaluate(check, context);
   if (outcome instanceof NotChecked) {
     return `${check.slug}: not checked, ${outcome instanceof Unconfigured ? 'a secret it needs is not set' : outcome.message}`;
   }
   const issue = github ? await syncIssue(github, check, outcome) : 'dry';
   return `${check.slug}: ${outcome.state}, ${outcome.detail} (issue ${issue})`;
-}));
+});
 await closeSession(context);
 console.log(results.join('\n') || `no check has the cadence ${cadence}`);
