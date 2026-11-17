@@ -4,6 +4,9 @@ import { Failure, Unconfigured } from './types.ts';
 const DEFAULT_MAIL_API = 'https://api.mail.tm';
 const MAIL_WAIT_MS = 150_000;
 const POLL_MS = 3_000;
+/** The mailbox provider limits requests per address: a 429 is retried this many times, waiting longer each time (2 s, 4 s, 6 s, 8 s). */
+const RETRIES_ON_429 = 4;
+const BACKOFF_MS = 2_000;
 
 interface Message {
   id: string;
@@ -25,11 +28,19 @@ export function mailbox(context: Context): {
     if (!token) {
       throw new Failure('the probe mailbox did not accept its login');
     }
-    const response = await context.fetch(`${api}${path}`, {
-      method,
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    const backoff = Number(context.env.MAIL_BACKOFF_MS ?? BACKOFF_MS);
+    let response: Response;
+    for (let attempt = 1; ; attempt += 1) {
+      response = await context.fetch(`${api}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      if (response.status !== 429 || attempt > RETRIES_ON_429) {
+        break;
+      }
+      await new Promise((done) => setTimeout(done, backoff * attempt));
+    }
     if (!response.ok) {
       throw new Failure(`the probe mailbox answered ${String(response.status)}`);
     }
