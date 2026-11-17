@@ -25,6 +25,37 @@ sites:
   - name: Site (.com)
     url: https://aeolus-fleet.com
     expectedStatusCodes: [200]
+  # The rows below show the outcome of a check of checks/: its status issue is open when the check is down or degraded
+  # (see checks/src/issues.ts), and the row reads that issue, so the page says what the check found.
+  - name: "Fleet core: fleet list"
+    slug: check-fleet-list
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-fleet-list&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Fleet core: message round trip"
+    slug: check-fleet-round-trip
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-fleet-round-trip&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: Trierarch plugin and trierarchs
+    slug: check-trierarchs
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-trierarchs&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: squadrons
+    slug: check-squadrons
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-squadrons&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  # The watch plugin has no row while production commissions none: its check is not checked, and a part that is not connected is not down.
 
 assignees:
   - ThomasHendrickx
