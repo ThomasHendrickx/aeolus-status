@@ -66,7 +66,7 @@ before(async () => {
   });
   const account = await listen((request, response) => {
     if (request.url === '/sign-in') {
-      html(response, `<h1>Sign in</h1><label for="e">Email</label><input id="e"><button onclick="fetch('/ask').then(()=>{document.body.innerHTML='<h1>Check your mail</h1>'})">Continue</button>`);
+      html(response, `<h1>Sign in</h1><label for="e">Email</label><input id="e"><button onclick="fetch('/ask').then(()=>{document.body.innerHTML='<h1>Check your mail</h1>'})">Email me a link</button>`);
     } else if (request.url === '/ask') {
       if (world.mail) {
         inbox.push({ id: '1', text: `Your link: ${account.origin}/link?token=a&amp;b=1 thanks` });
