@@ -10,6 +10,14 @@ sites:
   - name: Fleet versions
     url: https://fleet.aeolus-fleet.dev/version # public URL; privacy-guard: allow ssh-alias
     expectedStatusCodes: [200]
+  - name: Fleet read
+    url: https://fleet.aeolus-fleet.dev/api/v1/fleet/list # public URL; privacy-guard: allow ssh-alias
+    method: POST
+    headers:
+      - "Authorization: Bearer $FLEET_PROBE_TOKEN"
+      - "Content-Type: application/json"
+    body: "{}"
+    expectedStatusCodes: [200]
   - name: Account
     url: https://account.aeolus-fleet.dev/sign-in
     expectedStatusCodes: [200]
