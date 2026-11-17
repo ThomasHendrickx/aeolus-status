@@ -1,15 +1,14 @@
 # Pinned by hand. The checks Upptime cannot make: each opens or closes the same `status` issues Upptime does.
-# Cadences: every 5 minutes, every 15 minutes, every hour. A manual run takes the cadence it is given.
+# Cadences: every 5 minutes and every 15 minutes. A manual run takes the cadence it is given.
 name: Checks
 on:
   schedule:
     - cron: "*/5 * * * *"
     - cron: "*/15 * * * *"
-    - cron: "7 * * * *"
   workflow_dispatch:
     inputs:
       cadence:
-        description: "five, fifteen or hourly"
+        description: "five or fifteen"
         required: true
         default: five
 permissions:
@@ -18,9 +17,9 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
-      CADENCE: ${{ github.event.inputs.cadence || (github.event.schedule == '*/5 * * * *' && 'five') || (github.event.schedule == '*/15 * * * *' && 'fifteen') || 'hourly' }}
+      CADENCE: ${{ github.event.inputs.cadence || (github.event.schedule == '*/5 * * * *' && 'five') || 'fifteen' }}
     concurrency:
       group: checks-${{ github.event.inputs.cadence || github.event.schedule }}
       cancel-in-progress: false
@@ -40,3 +39,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           FLEET_PROBE_TOKEN: ${{ secrets.FLEET_PROBE_TOKEN }}
+          PROBE_MAIL_ADDRESS: ${{ secrets.PROBE_MAIL_ADDRESS }}
+          PROBE_MAIL_PASSWORD: ${{ secrets.PROBE_MAIL_PASSWORD }}

@@ -1,19 +1,20 @@
 /**
  * Runs the checks of one cadence and opens or closes their status issues.
  *
- * Usage: node src/run.ts <five|fifteen|hourly> [--dry]    (--dry prints the results and touches no issue)
+ * Usage: node src/run.ts <five|fifteen> [--dry]    (--dry prints the results and touches no issue)
  * Environment: GITHUB_TOKEN and GITHUB_REPOSITORY for the issues; each check's own secrets, named in its file.
  */
 import { realContext } from './context.ts';
 import { evaluate } from './engine.ts';
 import { type Github, syncIssue } from './issues.ts';
+import { closeSession } from './session.ts';
 import { checks } from './registry.ts';
 import { type Cadence, NotChecked, Unconfigured } from './types.ts';
 
 const cadence = process.argv[2] as Cadence | undefined;
 const dry = process.argv.includes('--dry');
-if (cadence !== 'five' && cadence !== 'fifteen' && cadence !== 'hourly') {
-  throw new Error('Usage: node src/run.ts <five|fifteen|hourly> [--dry]');
+if (cadence !== 'five' && cadence !== 'fifteen') {
+  throw new Error('Usage: node src/run.ts <five|fifteen> [--dry]');
 }
 
 const { GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_SERVER_URL, GITHUB_RUN_ID } = process.env;
@@ -41,4 +42,5 @@ const results = await Promise.all(selected.map(async (check) => {
   const issue = github ? await syncIssue(github, check, outcome) : 'dry';
   return `${check.slug}: ${outcome.state}, ${outcome.detail} (issue ${issue})`;
 }));
+await closeSession(context);
 console.log(results.join('\n') || `no check has the cadence ${cadence}`);

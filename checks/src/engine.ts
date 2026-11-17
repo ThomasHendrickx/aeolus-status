@@ -56,12 +56,13 @@ export const realTiming: Timing = {
 /** Down only when two tries in a row, a minute apart, are down: one lost packet is not an incident. The second try's outcome stands. */
 export async function evaluate<Context>(check: Check<Context>, context: Context, timing: Timing = realTiming): Promise<Outcome | NotChecked> {
   try {
-    const first = await tryOnce(check, context, timing.timeoutMs);
+    const timeoutMs = check.timeoutMs ?? timing.timeoutMs;
+    const first = await tryOnce(check, context, timeoutMs);
     if (first.state !== 'down') {
       return first;
     }
     await timing.sleep(timing.retryDelayMs);
-    return await tryOnce(check, context, timing.timeoutMs);
+    return await tryOnce(check, context, timeoutMs);
   } catch (error) {
     if (error instanceof NotChecked) {
       return error;
