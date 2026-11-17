@@ -25,6 +25,93 @@ sites:
   - name: Site (.com)
     url: https://aeolus-fleet.com
     expectedStatusCodes: [200]
+  # The rows below show the outcome of a check of checks/: its status issue is open when the check is down or degraded
+  # (see checks/src/issues.ts), and the row reads that issue, so the page says what the check found.
+  - name: "Fleet core: fleet list"
+    slug: check-fleet-list
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-fleet-list&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Fleet core: message round trip"
+    slug: check-fleet-round-trip
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-fleet-round-trip&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: Trierarch plugin and trierarchs
+    slug: check-trierarchs
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-trierarchs&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: squadrons
+    slug: check-squadrons
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-squadrons&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Gateway: OAuth discovery and MCP endpoint"
+    slug: check-gateway
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-gateway&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Account: sign-in page"
+    slug: check-account-page
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-account-page&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Site (.dev) in a browser"
+    slug: check-site-dev
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-site-dev&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Site (.com) in a browser"
+    slug: check-site-com
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-site-com&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Account: sign-in by mail"
+    slug: check-account-sign-in
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-account-sign-in&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Console: signed-in overview"
+    slug: check-console
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-console&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Bridge: signed-in first page"
+    slug: check-bridge
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-bridge&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  - name: "Aeolus app: signed-in pages"
+    slug: check-app
+    url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-app&state=open
+    headers:
+      - "Authorization: Bearer $GH_PAT"
+    __dangerous__body_down: " is down"
+    __dangerous__body_degraded: "has degraded performance"
+  # The watch plugin has no row while production commissions none: its check is not checked, and a part that is not connected is not down.
 
 assignees:
   - ThomasHendrickx

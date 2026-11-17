@@ -4,7 +4,7 @@ The status page of the Aeolus fleet, at [status.aeolus-fleet.dev](https://status
 
 ## The checks
 
-`.upptimerc.yml` lists them, each a public URL, checked every 5 minutes by `Uptime CI`. The fleet read check calls the fleet as a read-only probe ship, its crew token kept in the Actions secret `FLEET_PROBE_TOKEN`.
+`.upptimerc.yml` lists them, each a public URL, checked every 5 minutes by `Uptime CI`. The rows named for a check of `checks/` read that check's status issue (open when it is down or degraded) instead of a URL of the part, so the page shows what the check found; `checks/` runs them and opens and closes the issues. The fleet read check calls the fleet as a read-only probe ship, its crew token kept in the Actions secret `FLEET_PROBE_TOKEN`.
 
 ## Incidents
 

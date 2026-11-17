@@ -1,0 +1,30 @@
+# Pinned by hand. Runs the checks' own tests and type check on every change to them; it makes no live check.
+name: Checks CI
+on:
+  pull_request:
+    paths:
+      - "checks/**"
+      - ".github/workflows/checks*.yml"
+  push:
+    branches: [main]
+    paths:
+      - "checks/**"
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: checks
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.11.1"
+          cache: npm
+          cache-dependency-path: checks/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm test
