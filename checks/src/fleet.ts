@@ -13,7 +13,7 @@ export interface ListedShip {
   status: 'awaitingCrew' | 'crewed' | 'retired';
   lastSeenAt: string | null;
   isInReadReach?: boolean;
-  crewRequest?: { requestedAt: string; assignedTo: unknown; status: string | null } | null;
+  crewRequest?: { requestedAt: string; assignedTo: unknown; status: string | null; crewedBy?: unknown } | null;
 }
 
 /** The probe: a read-only ship of its own whose crew token is the repository secret FLEET_PROBE_TOKEN. */

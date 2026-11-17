@@ -124,12 +124,24 @@ test('trierarchs: none seen is down; so is a plugin not seen', async () => {
   assert.equal((await evaluate(trierarchs, context(listing(noPlugin)), timing) as { state: string }).state, 'down');
 });
 
-test('trierarchs: crew requests waiting over 15 minutes: one is degraded, all of two or more is down', async () => {
+test('trierarchs: crew requests waiting over 15 minutes: some is degraded, every one is down', async () => {
   const waiting = (name: string, minutes: number): ListedShip => ship({ type: 'agent', kind: 'agent', name, status: 'awaitingCrew', crewRequest: { requestedAt: ago(minutes), assignedTo: null, status: null } });
   const one = await evaluate(trierarchs, context(listing([...healthy(), waiting('a', 20), ship({ type: 'agent', kind: 'agent', status: 'awaitingCrew', crewRequest: { requestedAt: ago(2), assignedTo: null, status: null } })])), timing);
   assert.deepEqual(one, { state: 'degraded', detail: '1 of 2 crew requests waiting over 15 minutes' });
   const all = await evaluate(trierarchs, context(listing([...healthy(), waiting('a', 20), waiting('b', 30)])), timing);
   assert.equal((all as { state: string }).state, 'down');
+});
+
+test('trierarchs: a single request waiting is every request waiting, so down', async () => {
+  const waiting = ship({ type: 'agent', kind: 'agent', status: 'awaitingCrew', crewRequest: { requestedAt: ago(20), assignedTo: null, status: null, crewedBy: null } });
+  assert.deepEqual(await evaluate(trierarchs, context(listing([...healthy(), waiting])), timing), { state: 'down', detail: '1 crew request waiting over 15 minutes, none taken up' });
+});
+
+test('trierarchs: a request still uncrewed counts as waiting whatever the ship status says', async () => {
+  const uncrewed = ship({ type: 'agent', kind: 'agent', status: 'crewed', crewRequest: { requestedAt: ago(20), assignedTo: { id: 'x' }, status: 'starting', crewedBy: null } });
+  const crewed = ship({ type: 'agent', kind: 'agent', name: 'c', status: 'crewed', crewRequest: { requestedAt: ago(90), assignedTo: { id: 'x' }, status: 'running', crewedBy: { id: 'x' } } });
+  const fresh = ship({ type: 'agent', kind: 'agent', name: 'd', status: 'awaitingCrew', crewRequest: { requestedAt: ago(2), assignedTo: null, status: null, crewedBy: null } });
+  assert.deepEqual(await evaluate(trierarchs, context(listing([...healthy(), uncrewed, crewed, fresh])), timing), { state: 'degraded', detail: '1 of 2 crew requests waiting over 15 minutes' });
 });
 
 test('trierarchs: a ship the probe cannot read fails the row instead of reading as unseen', async () => {
@@ -146,4 +158,3 @@ test('squadrons and the watch plugin: seen is up, not seen is down', async () =>
   const stale = healthy().map((s) => (s.type === 'watch' ? { ...s, lastSeenAt: ago(30) } : s));
   assert.equal((await evaluate(watch, context(listing(stale)), timing) as { state: string }).state, 'down');
 });
-
