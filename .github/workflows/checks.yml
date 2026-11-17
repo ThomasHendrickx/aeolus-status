@@ -1,0 +1,40 @@
+# Pinned by hand. The checks Upptime cannot make: each opens or closes the same `status` issues Upptime does.
+# Cadences: every 5 minutes, every 15 minutes, every hour. A manual run takes the cadence it is given.
+name: Checks
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      cadence:
+        description: "five, fifteen or hourly"
+        required: true
+        default: five
+permissions:
+  contents: read
+  issues: write
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CADENCE: ${{ github.event.inputs.cadence || (github.event.schedule == '*/5 * * * *' && 'five') || (github.event.schedule == '*/15 * * * *' && 'fifteen') || 'hourly' }}
+    concurrency:
+      group: checks-${{ github.event.inputs.cadence || github.event.schedule }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: checks
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.11.1"
+          cache: npm
+          cache-dependency-path: checks/package-lock.json
+      - run: npm ci
+      - run: node src/run.ts "$CADENCE"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
