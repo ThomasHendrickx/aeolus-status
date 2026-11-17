@@ -15,7 +15,7 @@ interface Issue {
   pull_request?: unknown;
 }
 
-async function call(github: Github, method: string, path: string, body?: unknown): Promise<unknown> {
+async function call(github: Github, method: string, path: string, body?: unknown, tolerate?: number): Promise<unknown> {
   const response = await github.fetch(`https://api.github.com/repos/${github.repository}${path}`, {
     method,
     headers: {
@@ -26,7 +26,7 @@ async function call(github: Github, method: string, path: string, body?: unknown
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!response.ok) {
+  if (!response.ok && response.status !== tolerate) {
     throw new Error(`GitHub answered ${String(response.status)} to ${method} ${path}`);
   }
   return response.json();
@@ -57,6 +57,8 @@ export async function syncIssue(github: Github, check: { name: string; slug: str
   }
   const title = titleOf(check.name, outcome.state);
   if (!issue) {
+    // The check's own label must exist, or the next run cannot find the issue by it: made here, and 422 means it is there already.
+    await call(github, 'POST', '/labels', { name: check.slug, color: 'ededed', description: 'An incident the status checks opened' }, 422);
     await call(github, 'POST', '/issues', {
       title,
       labels: ['status', check.slug],

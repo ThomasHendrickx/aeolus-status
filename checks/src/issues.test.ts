@@ -22,7 +22,8 @@ test('a down check with no open issue opens one labelled status and its slug, wi
   const { github, calls } = fake([]);
   assert.equal(await syncIssue(github, check, { state: 'down', detail: 'answered 500' }), 'opened');
   assert.equal(calls[0]?.path, '/issues?labels=status%2Ccheck-fleet-list&state=open&per_page=10');
-  const created = calls[1];
+  assert.deepEqual([calls[1]?.method, calls[1]?.path, calls[1]?.body?.name], ['POST', '/labels', 'check-fleet-list']);
+  const created = calls[2];
   assert.equal(created?.method, 'POST');
   assert.equal(created?.body?.title, '🛑 Fleet core: fleet list is down');
   assert.deepEqual(created?.body?.labels, ['status', 'check-fleet-list']);
@@ -33,7 +34,7 @@ test('a down check with no open issue opens one labelled status and its slug, wi
 test('a degraded check opens the degraded title', async () => {
   const { github, calls } = fake([]);
   await syncIssue(github, check, { state: 'degraded', detail: 'took 3 s' });
-  assert.equal(calls[1]?.body?.title, titleOf(check.name, 'degraded'));
+  assert.equal(calls[2]?.body?.title, titleOf(check.name, 'degraded'));
   assert.match(titleOf(check.name, 'degraded'), /^⚠️ .* has degraded performance$/);
 });
 
@@ -57,4 +58,17 @@ test('an up check closes its open issue after a Resolved comment, and does nothi
   const none = fake([]);
   assert.equal(await syncIssue(none.github, check, { state: 'up', detail: 'ok' }), 'unchanged');
   assert.equal(none.calls.length, 1);
+});
+
+test('a label that exists already (422) does not stop the issue from opening', async () => {
+  const calls: string[] = [];
+  const github: Github = {
+    repository: 'o/r', token: 't', assignees: [], now: () => new Date(),
+    fetch: ((url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${String(url).replace('https://api.github.com/repos/o/r', '')}`);
+      return Promise.resolve(String(url).endsWith('/labels') ? new Response('{}', { status: 422 }) : Response.json(init?.method === 'GET' ? [] : {}));
+    }) as typeof fetch,
+  };
+  assert.equal(await syncIssue(github, check, { state: 'down', detail: 'x' }), 'opened');
+  assert.equal(calls.at(-1), 'POST /issues');
 });
