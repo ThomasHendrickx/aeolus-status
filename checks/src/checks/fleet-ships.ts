@@ -2,7 +2,10 @@ import type { Context } from '../context.ts';
 import { type ListedShip, minutesSince, probe } from '../fleet.ts';
 import { type Check, Failure, NotChecked, type Outcome } from '../types.ts';
 
-/** How long a ship may go unseen, and a crew request unassigned, before it counts: 15 minutes, as the design says. */
+/**
+ * How long a ship may go unseen, and a crew request unassigned or uncrewed, before it counts: 15 minutes, as the design says.
+ * The fleet list publishes no report or watch interval for a trierarch or plugin (its report carries no details), so 15 minutes stands for every ship.
+ */
 export const SEEN_MINUTES = 15;
 
 function readable(ships: ListedShip[]): void {
@@ -22,7 +25,7 @@ export const trierarchs: Check<Context> = {
     const trierarchs = ships.filter((ship) => ship.kind === 'trierarch' && ship.status !== 'retired');
     const unseen = trierarchs.filter((ship) => minutesSince(context, ship.lastSeenAt) > SEEN_MINUTES).length;
     const pluginSeen = ships.some((ship) => ship.type === 'trierarch-plugin' && minutesSince(context, ship.lastSeenAt) <= SEEN_MINUTES);
-    const requests = ships.filter((ship) => ship.status === 'awaitingCrew' && ship.crewRequest);
+    const requests = ships.filter((ship) => ship.crewRequest && ship.status !== 'retired' && (ship.status === 'awaitingCrew' || !ship.crewRequest.crewedBy));
     const waiting = requests.filter((ship) => minutesSince(context, ship.crewRequest?.requestedAt) > SEEN_MINUTES).length;
     if (trierarchs.length === 0 || unseen === trierarchs.length) {
       return { state: 'down', detail: `no trierarch seen for ${String(SEEN_MINUTES)} minutes` };
@@ -30,8 +33,8 @@ export const trierarchs: Check<Context> = {
     if (!pluginSeen) {
       return { state: 'down', detail: `the trierarch plugin not seen for ${String(SEEN_MINUTES)} minutes` };
     }
-    if (waiting >= 2 && waiting === requests.length) {
-      return { state: 'down', detail: `${String(waiting)} crew requests waiting over ${String(SEEN_MINUTES)} minutes, none taken up` };
+    if (waiting > 0 && waiting === requests.length) {
+      return { state: 'down', detail: `${String(waiting)} crew request${waiting === 1 ? '' : 's'} waiting over ${String(SEEN_MINUTES)} minutes, none taken up` };
     }
     const parts: string[] = [];
     if (unseen > 0) {
