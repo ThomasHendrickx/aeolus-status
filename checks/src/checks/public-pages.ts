@@ -20,7 +20,7 @@ const SITE = 'https://aeolus-fleet.dev';
 const SITE_COM = 'https://aeolus-fleet.com';
 
 /** Account app and sign-in, 1: the sign-in page loads with its assets. */
-export const accountPage = pageLoads('Account: sign-in page', 'check-account-page', 'five', (context) => context.env.ACCOUNT_URL ?? ACCOUNT, 'the sign-in page');
+export const accountPage = pageLoads('Account: sign-in page', 'check-account-page', 'five', (context) => `${context.env.ACCOUNT_URL ?? ACCOUNT}/sign-in`, 'the sign-in page');
 
 /** Site: the one-pager loads, on .dev and on .com. */
 export const siteDev = pageLoads('Site (.dev)', 'check-site-dev', 'fifteen', (context) => context.env.SITE_URL ?? SITE, 'the site');
