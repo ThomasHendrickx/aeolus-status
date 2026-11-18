@@ -81,28 +81,26 @@ export const accountSignIn: Check<Context> = {
   },
 };
 
-/** Console: the account's app switcher opens the fleet's overview, which loads with its assets and shows ships. */
+/** Console: the signed-in member opens the fleet overview directly. */
 export const consoleOverview: Check<Context> = {
   name: 'Console: signed-in overview',
   slug: 'check-console',
   cadence: 'fifteen',
   session: 'uses',
   run: (context, signal) => inSession(context, signal, async (page) => {
-    try {
-      await page.goto(`${urlOf(context, 'account')}/account`, { waitUntil: 'networkidle' });
+    const took = await openSigned(page, urlOf(context, 'console'));
+    const current = new URL(page.url());
+    if (current.origin === new URL(urlOf(context, 'account')).origin && current.pathname === '/account') {
       await page.getByRole('heading', { name: 'Home', exact: true }).waitFor();
-      const switcher = page.getByTestId('app-switcher-apps');
-      if (!(await switcher.isVisible()) && (await page.locator('p[data-testid="app-switcher"]').first().isVisible() || await noOpenableFleet(page))) {
+      const sections = page.getByRole('region').filter({ has: page.getByRole('heading', { name: /^Your (?:fleets|organisation’s fleets)$/ }) });
+      if (await noOpenableFleet(page) || (await sections.count() === 1 && await sections.getByRole('link', { name: /^Open / }).count() === 0 && await sections.getByRole('button', { name: /^Open / }).count() === 0)) {
         throw new NotChecked('the probe account has no openable fleet');
       }
-      await switcher.click();
-      await page.getByTestId('app-switcher-app').filter({ hasText: /^Console$/ }).click();
-      await page.waitForURL((url) => url.pathname === '/' && url.origin !== new URL(urlOf(context, 'account')).origin);
-    } catch (error) {
-      if (error instanceof NotChecked) throw error;
-      throw new Failure('the account app did not open the console');
+      throw new Failure('the console did not open');
     }
-    const took = await openSigned(page, page.url());
+    if (current.origin !== new URL(urlOf(context, 'console')).origin || current.pathname !== '/') {
+      throw new Failure('the console did not open');
+    }
     await shipsShown(page);
     return verdict(took, 'the console');
   }),
