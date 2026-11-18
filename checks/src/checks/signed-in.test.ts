@@ -90,10 +90,13 @@ before(async () => {
       html(response, '<main><h1>Wrong organisation</h1></main>');
     } else if (request.url === '/welcome') {
       if (request.headers.cookie?.includes('signed-in=yes')) {
-        html(response, '<main><h1>Welcome to Aeolus</h1><p>Signed in as probe@mail.test.</p></main>');
+        html(response, '<main><h1>Welcome to Aeolus</h1><p>Signed in as probe@mail.test.</p><form action="/accept" method="post"><label><input type="checkbox" required> I accept the terms and privacy notice</label><button>Continue</button></form></main>');
       } else {
         response.writeHead(302, { location: '/sign-in' }).end();
       }
+    } else if (request.url === '/accept' && request.method === 'POST') {
+      world.needsTerms = false;
+      response.writeHead(302, { location: '/account' }).end();
     } else if (request.url === '/account') {
       if (request.headers.cookie?.includes('signed-in=yes') && world.needsTerms) {
         response.writeHead(302, { location: '/welcome' }).end();
@@ -163,11 +166,26 @@ test('mail sign-in succeeds at authenticated terms, with dependent pages not che
   const context = fresh({ PROBE_ORGANISATION: 'Status probe' });
   try {
     assert.deepEqual(await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing), { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' });
+    assert.equal(world.needsTerms, true);
     for (const check of [consoleOverview, bridge, aeolusApp]) {
       const outcome = await evaluate(check, context, timing);
       assert.ok(outcome instanceof NotChecked);
       assert.equal(outcome.message, 'the probe must accept the account terms before these pages can be checked');
     }
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('terms are accepted only when explicitly enabled', { timeout: 30_000 }, async () => {
+  reset();
+  world.chooseOrganisation = true;
+  world.needsTerms = true;
+  const context = fresh({ PROBE_ORGANISATION: 'Status probe', ACCEPT_PROBE_TERMS: 'true' });
+  try {
+    assert.deepEqual(await evaluate(accountSignIn, context, timing), { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' });
+    assert.equal(world.needsTerms, false);
+    assert.deepEqual(await evaluate(bridge, context, timing), { state: 'up', detail: 'Bridge loads' });
   } finally {
     await closeSession(context);
   }

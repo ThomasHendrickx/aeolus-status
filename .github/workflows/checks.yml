@@ -7,6 +7,11 @@ on:
     - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
+      accept_probe_terms:
+        description: "Accept the probe account terms and privacy notice once"
+        type: boolean
+        required: true
+        default: false
       cadence:
         description: "five or fifteen"
         required: true
@@ -42,3 +47,4 @@ jobs:
           PROBE_MAIL_ADDRESS: ${{ secrets.PROBE_MAIL_ADDRESS }}
           PROBE_MAIL_PASSWORD: ${{ secrets.PROBE_MAIL_PASSWORD }}
           PROBE_ORGANISATION: ${{ vars.PROBE_ORGANISATION }}
+          ACCEPT_PROBE_TERMS: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_probe_terms && 'true' || 'false' }}
