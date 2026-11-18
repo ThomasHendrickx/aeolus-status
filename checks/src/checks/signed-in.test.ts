@@ -26,8 +26,7 @@ const html = (response: ServerResponse, body: string, status = 200): void => {
 const tile = '<div data-testid="harbour-tile">a ship</div>';
 const probeTile = '<div data-testid="harbour-tile">probe-ship</div>';
 const shipPage = '<main><p data-testid="conversation-start">The start of your conversation with probe-ship</p></main>';
-const worldAtStart = () => ({ mail: true, acceptEmail: true, autoAppSignIn: false, appNoFleet: false, appEndsSession: false, accountFleet: false, accountEmptyState: false, consoleAllowed: true, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
-const world = worldAtStart();
+const worldAtStart = () => ({ mail: true, acceptEmail: true, autoAppSignIn: false, appNoFleet: false, appEndsSession: false, accountFleet: false, accountEmptyState: false, consoleAllowed: true, consoleHandoffBroken: false, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });const world = worldAtStart();
 let servers: Server[] = [];
 let env: Record<string, string> = {};
 const inbox: { id: string; text: string }[] = [];
@@ -107,7 +106,7 @@ before(async () => {
       if (request.headers.cookie?.includes('signed-in=yes') && world.needsTerms) {
         response.writeHead(302, { location: '/welcome' }).end();
       } else if (request.headers.cookie?.includes('signed-in=yes')) {
-        html(response, world.accountHome + (world.accountEmptyState ? '<div data-testid="account-no-fleet">Your organisation has no fleet now.</div>' : `<section aria-labelledby="home-fleets"><h2 id="home-fleets">Your fleets</h2><ul>${world.accountFleet ? '<li>Example fleet</li>' : ''}</ul>${world.consoleAllowed ? `<button onclick="location='${consoleApp.origin}/'">Open console</button>` : ''}</section>`));
+        html(response, (world.consoleAllowed ? `<nav data-testid="app-switcher"><button data-testid="app-switcher-apps" onclick="document.getElementById('apps').hidden=false">Account</button><div id="apps" hidden><a data-testid="app-switcher-app" href="${world.consoleHandoffBroken ? '/account' : consoleApp.origin + '/?fleet=flt_probe'}">Console</a></div></nav>` : '') + world.accountHome + (world.accountEmptyState ? '<div data-testid="account-no-fleet">Your organisation has no fleet now.</div>' : `<section aria-labelledby="home-fleets"><h2 id="home-fleets">Your fleets</h2><ul>${world.accountFleet ? '<li>Example fleet</li>' : ''}</ul></section>`));
       } else {
         response.writeHead(302, { location: '/sign-in' }).end();
       }
@@ -369,12 +368,18 @@ test('without the probe mailbox nothing is checked', async () => {
 });
 
 
-test('a member without a console allowance is not checked, never down', { timeout: 15000 }, async () => {
+test('a probe without an openable fleet is not checked, never down', { timeout: 15000 }, async () => {
   reset();
   world.consoleAllowed = false;
   const result = await run({ ...consoleOverview, timeoutMs: 6000 });
   assert.ok(result instanceof NotChecked);
-  assert.equal(result.message, 'the probe account has no console allowance');
+  assert.equal(result.message, 'the probe account has no openable fleet');
+});
+
+test('a member whose switcher cannot reach the console is down', { timeout: 15000 }, async () => {
+  reset();
+  world.consoleHandoffBroken = true;
+  assert.deepEqual(await run({ ...consoleOverview, timeoutMs: 6000 }), { state: 'down', detail: 'the account app did not open the console' });
 });
 
 test('browser app sign-in can advance automatically without a continue button', { timeout: 15000 }, async () => {
