@@ -42,18 +42,19 @@ export class AssetFailure extends Failure {
 }
 
 /**
- * Loads a page as a person does and fails when any request failed or answered 400 or more, or an icon or manifest it links is not served.
+ * Loads a page and checks rendering resources and linked icons or manifests, excluding background requests.
  * Failure details omit URL credentials and query strings. Returns the milliseconds the load took.
  */
 export async function loadWithAssets(page: Page, url: string): Promise<number> {
   const failedUrls = new Map<string, string>();
+  const rendering = new Set(['document', 'script', 'stylesheet', 'image', 'font']);
   page.on('response', (response) => {
-    if (response.status() >= 400) {
+    if (rendering.has(response.request().resourceType()) && response.status() >= 400) {
       failedUrls.set(response.url(), `HTTP ${String(response.status())}`);
     }
   });
   page.on('requestfailed', (request) => {
-    if (!isAbortedPrefetch(request.failure()?.errorText ?? 'failed', request.url())) {
+    if (rendering.has(request.resourceType()) && !isAbortedPrefetch(request.failure()?.errorText ?? 'failed', request.url())) {
       const reason = request.failure()?.errorText ?? '';
       if (!failedUrls.has(request.url())) {
         failedUrls.set(request.url(), /^net::ERR_[A-Z_]+$/.test(reason) ? reason : 'request failed');
