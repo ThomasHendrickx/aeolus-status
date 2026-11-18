@@ -46,6 +46,21 @@ test('failed assets include origin, path and status without query secrets', asyn
   }
 });
 
+test('failed background fetch and an aborted stream do not make the page down', async () => {
+  const background = `<script>
+    fetch('/analytics');
+    const controller = new AbortController();
+    fetch('/stream', { signal: controller.signal }).catch(() => {});
+    setTimeout(() => controller.abort(), 100);
+  </script>`;
+  const { origin, server } = await serve({ '/': { body: page(background) }, '/icon.png': { type: 'image/png', body: 'x' }, '/analytics': { status: 401 }, '/stream': { delayMs: 1000 } });
+  try {
+    assert.deepEqual(await evaluate(siteDev, env('SITE_URL', `${origin}/`), timing), { state: 'up', detail: 'the site loads' });
+  } finally {
+    server.close();
+  }
+});
+
 test('a working account root with a broken /sign-in is down', async () => {
   const { origin, server } = await serve({ '/': { body: page() }, '/sign-in': { status: 500, body: page() }, '/icon.png': { type: 'image/png', body: 'x' } });
   try {
