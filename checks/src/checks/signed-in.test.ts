@@ -26,7 +26,7 @@ const html = (response: ServerResponse, body: string, status = 200): void => {
 const tile = '<div data-testid="harbour-tile">a ship</div>';
 const probeTile = '<div data-testid="harbour-tile">probe-ship</div>';
 const shipPage = '<main><p data-testid="conversation-start">The start of your conversation with probe-ship</p></main>';
-const worldAtStart = () => ({ mail: true, chooseOrganisation: false, redeemLink: true, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
+const worldAtStart = () => ({ mail: true, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
 const world = worldAtStart();
 let servers: Server[] = [];
 let env: Record<string, string> = {};
@@ -88,8 +88,16 @@ before(async () => {
       response.writeHead(302, { location: '/account', 'set-cookie': 'signed-in=yes; Path=/' }).end();
     } else if (request.url === '/choose-other') {
       html(response, '<main><h1>Wrong organisation</h1></main>');
-    } else if (request.url === '/account') {
+    } else if (request.url === '/welcome') {
       if (request.headers.cookie?.includes('signed-in=yes')) {
+        html(response, '<main><h1>Welcome to Aeolus</h1><p>Signed in as probe@mail.test.</p></main>');
+      } else {
+        response.writeHead(302, { location: '/sign-in' }).end();
+      }
+    } else if (request.url === '/account') {
+      if (request.headers.cookie?.includes('signed-in=yes') && world.needsTerms) {
+        response.writeHead(302, { location: '/welcome' }).end();
+      } else if (request.headers.cookie?.includes('signed-in=yes')) {
         html(response, world.accountHome);
       } else {
         response.writeHead(302, { location: '/sign-in' }).end();
@@ -143,6 +151,23 @@ test('mail sign-in chooses the configured probe organisation before checking its
   const context = fresh({ PROBE_ORGANISATION: 'Status probe' });
   try {
     assert.deepEqual(await evaluate({ ...accountSignIn, timeoutMs: 6_000 }, context, timing), { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' });
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('mail sign-in succeeds at authenticated terms, with dependent pages not checked', { timeout: 30_000 }, async () => {
+  reset();
+  world.chooseOrganisation = true;
+  world.needsTerms = true;
+  const context = fresh({ PROBE_ORGANISATION: 'Status probe' });
+  try {
+    assert.deepEqual(await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing), { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' });
+    for (const check of [consoleOverview, bridge, aeolusApp]) {
+      const outcome = await evaluate(check, context, timing);
+      assert.ok(outcome instanceof NotChecked);
+      assert.equal(outcome.message, 'the probe must accept the account terms before these pages can be checked');
+    }
   } finally {
     await closeSession(context);
   }
