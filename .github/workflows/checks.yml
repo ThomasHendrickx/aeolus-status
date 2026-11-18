@@ -53,6 +53,16 @@ jobs:
                   failedNotice: await page.getByText('We couldn’t sign you in', { exact: true }).count(),
                   chooseOrganisation: await page.getByRole('heading', { name: 'Choose your organisation', exact: true }).count(),
                 }));
+                if (await page.getByRole('heading', { name: 'Choose your organisation', exact: true }).count()) {
+                  await page.locator('main ul button').first().click();
+                  await page.waitForURL(url => url.origin === new URL(account).origin && ['/account', '/welcome', '/create'].includes(url.pathname));
+                  console.log('organisation choice diagnostic', JSON.stringify({
+                    accountHome: new URL(page.url()).pathname === '/account',
+                    welcome: new URL(page.url()).pathname === '/welcome',
+                    create: new URL(page.url()).pathname === '/create',
+                    sessionCookiePresent: (await browserContext.cookies()).some(cookie => cookie.name === 'aeolus_account_session'),
+                  }));
+                }
                 await page.goto(account + '/account');
                 console.log('protected account diagnostic', JSON.stringify({
                   stayedOnAccount: new URL(page.url()).pathname === '/account',
@@ -61,24 +71,6 @@ jobs:
                 }));
           `;
           writeFileSync(file, source.replace("throw new Failure('the sign-in link did not sign in');", diagnostic + "throw new Failure('the sign-in link did not sign in');"));
-          const mailboxFile = 'src/mailbox.ts';
-          const mailboxSource = readFileSync(mailboxFile, 'utf8');
-          const original = "?.find((candidate) => candidate.startsWith(`${origin}/`))";
-          const replacement = `?.find((candidate, index, candidates) => {
-            if (index === 0) {
-              const first = candidates.find(value => value.startsWith(origin + '/'));
-              console.log('mail candidate diagnostic', JSON.stringify({
-                firstIsSignInLink: first ? new URL(first).pathname === '/sign-in/link' : false,
-                firstIsImage: first ? new URL(first).pathname.startsWith('/email/') : false,
-                hasSignInLink: candidates.some(value => new URL(value).origin === origin && new URL(value).pathname === '/sign-in/link' && new URL(value).searchParams.has('token')),
-              }));
-            }
-            const parsed = new URL(candidate);
-            return parsed.origin === origin && parsed.pathname === '/sign-in/link' && parsed.searchParams.has('token');
-          })`;
-          if (!mailboxSource.includes(original)) throw new Error('diagnostic patch did not match');
-          writeFileSync(mailboxFile, mailboxSource.replace(original, replacement));
-
           JS
       - name: Walk the probe once without changing status issues
         run: |
