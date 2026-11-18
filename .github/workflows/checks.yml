@@ -61,6 +61,24 @@ jobs:
                 }));
           `;
           writeFileSync(file, source.replace("throw new Failure('the sign-in link did not sign in');", diagnostic + "throw new Failure('the sign-in link did not sign in');"));
+          const mailboxFile = 'src/mailbox.ts';
+          const mailboxSource = readFileSync(mailboxFile, 'utf8');
+          const original = "?.find((candidate) => candidate.startsWith(`${origin}/`))";
+          const replacement = `?.find((candidate, index, candidates) => {
+            if (index === 0) {
+              const first = candidates.find(value => value.startsWith(origin + '/'));
+              console.log('mail candidate diagnostic', JSON.stringify({
+                firstIsSignInLink: first ? new URL(first).pathname === '/sign-in/link' : false,
+                firstIsImage: first ? new URL(first).pathname.startsWith('/email/') : false,
+                hasSignInLink: candidates.some(value => new URL(value).origin === origin && new URL(value).pathname === '/sign-in/link' && new URL(value).searchParams.has('token')),
+              }));
+            }
+            const parsed = new URL(candidate);
+            return parsed.origin === origin && parsed.pathname === '/sign-in/link' && parsed.searchParams.has('token');
+          })`;
+          if (!mailboxSource.includes(original)) throw new Error('diagnostic patch did not match');
+          writeFileSync(mailboxFile, mailboxSource.replace(original, replacement));
+
           JS
       - run: node src/run.ts "$CADENCE"
         env:
