@@ -54,7 +54,20 @@ jobs:
                   chooseOrganisation: await page.getByRole('heading', { name: 'Choose your organisation', exact: true }).count(),
                 }));
                 if (await page.getByRole('heading', { name: 'Choose your organisation', exact: true }).count()) {
-                  await page.locator('main ul button').first().click();
+                  const { createHash } = await import('node:crypto');
+                  const choices = page.locator('main ul button');
+                  let matches = 0;
+                  let selected = -1;
+                  for (let index = 0; index < await choices.count(); index++) {
+                    const name = (await choices.nth(index).innerText()).trim();
+                    if (createHash('sha256').update(name).digest('hex') === '447294ec34f4c392c0f5fc8257e79ae238fbb59c3045e99dba1384860b83381d') {
+                      matches++;
+                      selected = index;
+                    }
+                  }
+                  console.log('expected organisation diagnostic', JSON.stringify({ exactMatches: matches }));
+                  if (matches !== 1) throw new Error('expected organisation not uniquely offered');
+                  await choices.nth(selected).click();
                   await page.waitForURL(url => url.origin === new URL(account).origin && ['/account', '/welcome', '/create'].includes(url.pathname));
                   console.log('organisation choice diagnostic', JSON.stringify({
                     accountHome: new URL(page.url()).pathname === '/account',
