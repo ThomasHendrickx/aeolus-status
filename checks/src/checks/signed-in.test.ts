@@ -50,7 +50,11 @@ before(async () => {
     }
   });
   const gateway = await listen((_, response) => html(response, world.bridgePage));
-  const consoleApp = await listen((_, response) => html(response, world.consolePage));
+  const consoleApp = await listen((_, response) => {
+    if (!world.consoleAllowed) response.writeHead(302, { location: `${account.origin}/account` }).end();
+    else if (world.consoleHandoffBroken) response.writeHead(302, { location: `${account.origin}/sign-in` }).end();
+    else html(response, world.consolePage);
+  });
   const fleet = await listen((_, response) => {
     response.setHeader('content-type', 'application/json');
     response.end('{"shipId":"shp_probe","fleetId":"flt_probe","name":"probe-ship"}');
@@ -106,7 +110,7 @@ before(async () => {
       if (request.headers.cookie?.includes('signed-in=yes') && world.needsTerms) {
         response.writeHead(302, { location: '/welcome' }).end();
       } else if (request.headers.cookie?.includes('signed-in=yes')) {
-        html(response, (world.consoleAllowed ? `<nav data-testid="app-switcher"><button data-testid="app-switcher-apps" onclick="document.getElementById('apps').hidden=false">Account</button><div id="apps" hidden><a data-testid="app-switcher-app" href="${world.consoleHandoffBroken ? '/account' : consoleApp.origin + '/?fleet=flt_probe'}">Console</a></div></nav>` : '<p data-testid="app-switcher">Example / Account</p>') + world.accountHome + (world.accountEmptyState ? '<div data-testid="account-no-fleet">Your organisation has no fleet now.</div>' : `<section aria-labelledby="home-fleets"><h2 id="home-fleets">Your fleets</h2><ul>${world.accountFleet ? '<li>Example fleet</li>' : ''}</ul></section>`));
+        html(response, world.accountHome + (world.accountEmptyState ? '<div data-testid="account-no-fleet">Your organisation has no fleet now.</div>' : `<section aria-labelledby="home-fleets"><h2 id="home-fleets">Your fleets</h2><ul>${world.accountFleet ? '<li>Example fleet</li>' : ''}</ul>${world.consoleAllowed ? '<a href="/fleet">Open fleet</a>' : ''}</section>`));
       } else {
         response.writeHead(302, { location: '/sign-in' }).end();
       }
@@ -117,7 +121,7 @@ before(async () => {
     }
   });
   servers = [mail.server, gateway.server, consoleApp.server, app.server, account.server, fleet.server];
-  env = { PROBE_MAIL_ADDRESS: PROBE, PROBE_MAIL_PASSWORD: 'p', MAIL_API: mail.origin, ACCOUNT_URL: account.origin, GATEWAY_URL: gateway.origin, APP_URL: app.origin, MAIL_WAIT_MS: '1500', FLEET_URL: fleet.origin, FLEET_PROBE_TOKEN: 'x' };
+  env = { PROBE_MAIL_ADDRESS: PROBE, PROBE_MAIL_PASSWORD: 'p', MAIL_API: mail.origin, ACCOUNT_URL: account.origin, GATEWAY_URL: gateway.origin, CONSOLE_URL: consoleApp.origin, APP_URL: app.origin, MAIL_WAIT_MS: '1500', FLEET_URL: fleet.origin, FLEET_PROBE_TOKEN: 'x' };
 });
 after(() => {
   for (const server of servers) {
@@ -377,7 +381,7 @@ test('a probe without an openable fleet is not checked, never down', { timeout: 
   assert.equal(result.message, 'the probe account has no openable fleet');
 });
 
-test('a member whose switcher cannot reach the console is down', { timeout: 15000 }, async () => {
+test('a member redirected to sign-in from the direct console address is down', { timeout: 15000 }, async () => {
   reset();
   world.consoleHandoffBroken = true;
   const result = await run({ ...consoleOverview, timeoutMs: 6000 });
