@@ -35,11 +35,12 @@ test('a page that loads with its icon is up', async () => {
   }
 });
 
-test('a page whose icon or script is not served is down, with a count and no address', async () => {
-  const { origin, server } = await serve({ '/': { body: page('<script src="/app.js"></script>') } });
+test('failed assets include origin, path and status without query secrets', async () => {
+  const { origin, server } = await serve({ '/': { body: page('<script src="/app.js?token=private-secret"></script>') } });
   try {
     const outcome = await evaluate(siteDev, env('SITE_URL', `${origin}/`), timing);
-    assert.deepEqual(outcome, { state: 'down', detail: '2 assets of the page failed to load' });
+    assert.deepEqual(outcome, { state: 'down', detail: `2 assets of the page failed to load: ${origin}/app.js (HTTP 404), ${origin}/icon.png (HTTP 404)` });
+    assert.doesNotMatch(JSON.stringify(outcome), /private-secret|token=/);
   } finally {
     server.close();
   }
