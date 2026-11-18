@@ -25,20 +25,39 @@ function isAbortedPrefetch(errorText: string, url: string): boolean {
   return errorText === 'net::ERR_ABORTED' && new URL(url).searchParams.has('_rsc');
 }
 
+/** An asset failure with URL credentials, queries and suspicious path segments removed. */
+export class AssetFailure extends Failure {
+  constructor(failures: Map<string, string>) {
+    const descriptions = [...failures].map(([raw, reason]) => {
+      const url = new URL(raw);
+      const sensitive = /%|@|shp_|token|secret|password|session|[A-Za-z0-9_-]{24,}/i;
+      const segments = url.pathname.split('/');
+      const host = url.hostname.split('.').some((label) => /[A-Za-z0-9_-]{24,}/.test(label)) ? '[redacted]' : url.host;
+      const path = segments.map((segment, index) => sensitive.test(segment) || (index > 0 && /token|secret|password|session/i.test(segments[index - 1] ?? '')) ? '[redacted]' : segment).join('/');
+      const address = `${url.protocol}//${host}${path}`;
+      return `${address} (${reason})`;
+    });
+    super(`${String(failures.size)} asset${failures.size === 1 ? '' : 's'} of the page failed to load: ${descriptions.join(', ')}`);
+  }
+}
+
 /**
  * Loads a page as a person does and fails when any request failed or answered 400 or more, or an icon or manifest it links is not served.
- * The failure says how many, never which: the repository is public. Returns the milliseconds the load took.
+ * Failure details omit URL credentials and query strings. Returns the milliseconds the load took.
  */
 export async function loadWithAssets(page: Page, url: string): Promise<number> {
-  const failedUrls = new Set<string>();
+  const failedUrls = new Map<string, string>();
   page.on('response', (response) => {
     if (response.status() >= 400) {
-      failedUrls.add(response.url());
+      failedUrls.set(response.url(), `HTTP ${String(response.status())}`);
     }
   });
   page.on('requestfailed', (request) => {
     if (!isAbortedPrefetch(request.failure()?.errorText ?? 'failed', request.url())) {
-      failedUrls.add(request.url());
+      const reason = request.failure()?.errorText ?? '';
+      if (!failedUrls.has(request.url())) {
+        failedUrls.set(request.url(), /^net::ERR_[A-Z_]+$/.test(reason) ? reason : 'request failed');
+      }
     }
   });
   const started = Date.now();
@@ -50,13 +69,14 @@ export async function loadWithAssets(page: Page, url: string): Promise<number> {
   const took = Date.now() - started;
   const linked = await page.locator('link[rel~="icon"], link[rel="apple-touch-icon"], link[rel="manifest"]').evaluateAll((links) => links.map((link) => (link as HTMLLinkElement).href));
   for (const icon of linked) {
-    if (!(await page.request.get(icon)).ok()) {
-      failedUrls.add(icon);
+    const response = await page.request.get(icon);
+    if (!response.ok()) {
+      failedUrls.set(icon, `HTTP ${String(response.status())}`);
     }
   }
   const failed = failedUrls.size;
   if (failed > 0) {
-    throw new Failure(`${String(failed)} asset${failed === 1 ? '' : 's'} of the page failed to load`);
+    throw new AssetFailure(failedUrls);
   }
   return took;
 }
