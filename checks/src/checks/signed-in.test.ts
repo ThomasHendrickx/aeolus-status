@@ -26,7 +26,7 @@ const html = (response: ServerResponse, body: string, status = 200): void => {
 const tile = '<div data-testid="harbour-tile">a ship</div>';
 const probeTile = '<div data-testid="harbour-tile">probe-ship</div>';
 const shipPage = '<main><p data-testid="conversation-start">The start of your conversation with probe-ship</p></main>';
-const worldAtStart = () => ({ mail: true, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
+const worldAtStart = () => ({ mail: true, autoAppSignIn: false, consoleAllowed: true, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
 const world = worldAtStart();
 let servers: Server[] = [];
 let env: Record<string, string> = {};
@@ -59,6 +59,7 @@ before(async () => {
   const app = await listen((request, response) => {
     const path = request.url?.split('?')[0];
     if (path === '/sign-in/start') {
+      if (world.autoAppSignIn) { response.writeHead(302, { location: '/' }).end(); return; }
       html(response, '<button data-testid="sign-in-continue" onclick="location=\'/\'">Sign in</button>');
     } else if (path === '/fleet') {
       html(response, world.fleetPage);
@@ -101,7 +102,7 @@ before(async () => {
       if (request.headers.cookie?.includes('signed-in=yes') && world.needsTerms) {
         response.writeHead(302, { location: '/welcome' }).end();
       } else if (request.headers.cookie?.includes('signed-in=yes')) {
-        html(response, world.accountHome);
+        html(response, world.accountHome + `<section aria-labelledby="home-fleets"><h2 id="home-fleets">Your fleets</h2>${world.consoleAllowed ? `<button onclick="location='${consoleApp.origin}/'">Open console</button>` : ''}</section>`);
       } else {
         response.writeHead(302, { location: '/sign-in' }).end();
       }
@@ -348,4 +349,19 @@ test('checks that use the session start after the ones that open it, the rest at
 test('without the probe mailbox nothing is checked', async () => {
   const outcome = await run(accountSignIn, fresh({ PROBE_MAIL_ADDRESS: '' }));
   assert.ok(outcome instanceof NotChecked);
+});
+
+
+test('a member without a console allowance is not checked, never down', { timeout: 15000 }, async () => {
+  reset();
+  world.consoleAllowed = false;
+  const result = await run({ ...consoleOverview, timeoutMs: 6000 });
+  assert.ok(result instanceof NotChecked);
+  assert.equal(result.message, 'the probe account has no console allowance');
+});
+
+test('browser app sign-in can advance automatically without a continue button', { timeout: 15000 }, async () => {
+  reset();
+  world.autoAppSignIn = true;
+  assert.deepEqual(await run({ ...aeolusApp, timeoutMs: 6000 }), { state: 'up', detail: 'the app loads' });
 });
