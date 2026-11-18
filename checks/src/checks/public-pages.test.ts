@@ -35,11 +35,27 @@ test('a page that loads with its icon is up', async () => {
   }
 });
 
-test('a page whose icon or script is not served is down, with a count and no address', async () => {
-  const { origin, server } = await serve({ '/': { body: page('<script src="/app.js"></script>') } });
+test('failed assets include origin, path and status without query secrets', async () => {
+  const { origin, server } = await serve({ '/': { body: page('<script src="/app.js?token=private-secret"></script>') } });
   try {
     const outcome = await evaluate(siteDev, env('SITE_URL', `${origin}/`), timing);
-    assert.deepEqual(outcome, { state: 'down', detail: '2 assets of the page failed to load' });
+    assert.deepEqual(outcome, { state: 'down', detail: `2 assets of the page failed to load: ${origin}/app.js (HTTP 404), ${origin}/icon.png (HTTP 404)` });
+    assert.doesNotMatch(JSON.stringify(outcome), /private-secret|token=/);
+  } finally {
+    server.close();
+  }
+});
+
+test('failed background fetch and an aborted stream do not make the page down', async () => {
+  const background = `<script>
+    fetch('/analytics');
+    const controller = new AbortController();
+    fetch('/stream', { signal: controller.signal }).catch(() => {});
+    setTimeout(() => controller.abort(), 100);
+  </script>`;
+  const { origin, server } = await serve({ '/': { body: page(background) }, '/icon.png': { type: 'image/png', body: 'x' }, '/analytics': { status: 401 }, '/stream': { delayMs: 1000 } });
+  try {
+    assert.deepEqual(await evaluate(siteDev, env('SITE_URL', `${origin}/`), timing), { state: 'up', detail: 'the site loads' });
   } finally {
     server.close();
   }

@@ -6,6 +6,7 @@ import { Failure, NotChecked } from './types.ts';
 
 export const URLS = {
   account: 'https://account.aeolus-fleet.dev',
+  console: 'https://fleet.aeolus-fleet.dev',
   gateway: 'https://gateway.aeolus-fleet.dev',
   app: 'https://app.aeolus-fleet.dev',
 };

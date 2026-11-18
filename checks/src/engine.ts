@@ -1,3 +1,4 @@
+import { AssetFailure } from './browser.ts';
 import { type Check, Failure, NotChecked, type Outcome } from './types.ts';
 
 export const TIMEOUT_MS = 30_000;
@@ -34,7 +35,7 @@ export async function tryOnce<Context>(check: Check<Context>, context: Context, 
     if (timedOut) {
       return { state: 'down', detail: `no answer within ${String(timeoutMs / 1000)} seconds` };
     }
-    return { state: 'down', detail: error instanceof Failure ? publicDetail(error.message) : 'the check could not complete' };
+    return { state: 'down', detail: error instanceof AssetFailure ? error.message : error instanceof Failure ? publicDetail(error.message) : 'the check could not complete' };
   } finally {
     clearTimeout(timer);
     controller.abort();
