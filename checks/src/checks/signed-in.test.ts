@@ -25,7 +25,7 @@ const html = (response: ServerResponse, body: string, status = 200): void => {
 
 const tile = '<div data-testid="harbour-tile">a ship</div>';
 const probeTile = '<div data-testid="harbour-tile">probe-ship</div>';
-const shipPage = '<main><p data-testid="conversation-start">The start of your conversation with probe-ship</p></main>';
+const shipPage = '<main>This conversation is not available.</main>';
 const worldAtStart = () => ({ mail: true, acceptEmail: true, autoAppSignIn: false, appNoFleet: false, appEndsSession: false, accountFleet: false, accountEmptyState: false, consoleAllowed: true, consoleHandoffBroken: false, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });const world = worldAtStart();
 let servers: Server[] = [];
 let env: Record<string, string> = {};
@@ -335,13 +335,9 @@ test('an app whose fleet page shows other ships but not the probe own is down', 
   assert.deepEqual(await run(aeolusApp), { state: 'down', detail: 'the page does not show the probe\'s own ship' });
 });
 
-test('an app whose ship page crashes is down while the home and fleet pages work', { timeout: 120_000 }, async () => {
+test('a fleet-only member can pass the app check without opening a conversation', { timeout: 120_000 }, async () => {
   reset();
-  world.shipPage = '<main><h1>This page did not open</h1><button data-testid="page-did-not-open-try-again">Try again</button></main>';
-  assert.deepEqual(await run(aeolusApp), { state: 'down', detail: 'the page shows an error' });
-  reset();
-  world.shipPage = '<main><h1>Nothing here</h1></main>';
-  assert.deepEqual(await run(aeolusApp), { state: 'down', detail: 'the ship page does not show the ship' });
+  assert.deepEqual(await run(aeolusApp), { state: 'up', detail: 'the app loads' });
 });
 
 test('the signed-in page checks keep the 30 second default and use the session the sign-in opened', () => {
