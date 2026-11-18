@@ -56,6 +56,12 @@ async function inSession<T>(context: Context, signal: AbortSignal, run: (page: P
   }
 }
 
+async function noOpenableFleet(page: Page): Promise<boolean> {
+  const sections = page.getByRole('region').filter({ has: page.getByRole('heading', { name: /^Your (?:fleets|organisation’s fleets)$/ }) });
+  const emptyState = page.getByTestId('account-no-fleet');
+  return await emptyState.isVisible() || (await sections.count() === 1 && await sections.locator('ul').count() === 1 && await sections.locator('li').count() === 0 && await sections.getByRole('link', { name: /^Open / }).count() === 0 && await sections.getByRole('button', { name: /^Open / }).count() === 0);
+}
+
 function verdict(took: number, what: string): Outcome {
   return took > PAGE_BUDGET_MS ? { state: 'degraded', detail: `${what} took ${String(Math.round(took / 100) / 10)} s to load` } : { state: 'up', detail: `${what} loads` };
 }
@@ -75,7 +81,7 @@ export const accountSignIn: Check<Context> = {
   },
 };
 
-/** Console: signed in as the probe account, the console's overview loads with its assets and shows the fleet's ships, as Open in console from the account app leads to it. */
+/** Console: the account's app switcher opens the fleet's overview, which loads with its assets and shows ships. */
 export const consoleOverview: Check<Context> = {
   name: 'Console: signed-in overview',
   slug: 'check-console',
@@ -85,12 +91,12 @@ export const consoleOverview: Check<Context> = {
     try {
       await page.goto(`${urlOf(context, 'account')}/account`, { waitUntil: 'networkidle' });
       await page.getByRole('heading', { name: 'Home', exact: true }).waitFor();
-      const openConsole = page.getByRole('button', { name: 'Open console', exact: true });
-      // A member's loaded fleet list deliberately omits this action without an allowance.
-      if (await page.getByRole('heading', { name: 'Your fleets', exact: true }).isVisible() && await openConsole.count() === 0) {
-        throw new NotChecked('the probe account has no console allowance');
+      const switcher = page.getByTestId('app-switcher-apps');
+      if (!(await switcher.isVisible()) && (await page.locator('p[data-testid="app-switcher"]').first().isVisible() || await noOpenableFleet(page))) {
+        throw new NotChecked('the probe account has no openable fleet');
       }
-      await openConsole.first().click();
+      await switcher.click();
+      await page.getByTestId('app-switcher-app').filter({ hasText: /^Console$/ }).click();
       await page.waitForURL((url) => url.pathname === '/' && url.origin !== new URL(urlOf(context, 'account')).origin);
     } catch (error) {
       if (error instanceof NotChecked) throw error;
@@ -141,10 +147,7 @@ export const aeolusApp: Check<Context> = {
         // The gateway sends a signed-in account with no openable fleet back to Account.
         // Require the protected home and positive evidence that no fleet is offered.
         await page.getByRole('heading', { name: 'Home', exact: true }).waitFor();
-        const sections = page.getByRole('region').filter({ has: page.getByRole('heading', { name: /^Your (?:fleets|organisation’s fleets)$/ }) });
-        const emptyState = page.getByTestId('account-no-fleet');
-        const noFleet = await emptyState.isVisible() || (await sections.count() === 1 && await sections.locator('ul').count() === 1 && await sections.locator('li').count() === 0 && await sections.getByRole('link', { name: /^Open / }).count() === 0 && await sections.getByRole('button', { name: /^Open / }).count() === 0);
-        if (noFleet) throw new NotChecked('the probe account has no openable fleet');
+        if (await noOpenableFleet(page)) throw new NotChecked('the probe account has no openable fleet');
         throw new Failure('the app did not sign the probe in');
       }
     } catch (error) {
