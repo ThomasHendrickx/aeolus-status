@@ -148,6 +148,17 @@ test('mail sign-in chooses the configured probe organisation before checking its
   }
 });
 
+test('a configured organisation absent from the chooser fails explicitly', { timeout: 30_000 }, async () => {
+  reset();
+  world.chooseOrganisation = true;
+  const context = fresh({ PROBE_ORGANISATION: 'Missing organisation' });
+  try {
+    assert.deepEqual(await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing), { state: 'down', detail: 'the configured probe organisation was not offered' });
+  } finally {
+    await closeSession(context);
+  }
+});
+
 test('an organisation chooser without probe configuration is not a product outage', { timeout: 30_000 }, async () => {
   reset();
   world.chooseOrganisation = true;
