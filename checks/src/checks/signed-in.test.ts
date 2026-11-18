@@ -26,7 +26,7 @@ const html = (response: ServerResponse, body: string, status = 200): void => {
 const tile = '<div data-testid="harbour-tile">a ship</div>';
 const probeTile = '<div data-testid="harbour-tile">probe-ship</div>';
 const shipPage = '<main><p data-testid="conversation-start">The start of your conversation with probe-ship</p></main>';
-const worldAtStart = () => ({ mail: true, consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
+const worldAtStart = () => ({ mail: true, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
 const world = worldAtStart();
 let servers: Server[] = [];
 let env: Record<string, string> = {};
@@ -77,7 +77,31 @@ before(async () => {
       }
       html(response, 'ok');
     } else if (request.url?.startsWith('/link')) {
-      response.writeHead(302, { location: `${gateway.origin}/bridge` }).end();
+      if (!world.redeemLink) {
+        response.writeHead(302, { location: '/sign-in' }).end();
+      } else if (world.chooseOrganisation) {
+        html(response, `<main><h1>Choose your organisation</h1><ul><li><button onclick="location='/choose-other'">Other organisation</button></li><li><button onclick="location='/choose-probe'">Status probe</button></li></ul></main>`);
+      } else {
+        response.writeHead(302, { location: '/account', 'set-cookie': 'signed-in=yes; Path=/' }).end();
+      }
+    } else if (request.url === '/choose-probe') {
+      response.writeHead(302, { location: '/account', 'set-cookie': 'signed-in=yes; Path=/' }).end();
+    } else if (request.url === '/choose-other') {
+      html(response, '<main><h1>Wrong organisation</h1></main>');
+    } else if (request.url === '/welcome') {
+      if (request.headers.cookie?.includes('signed-in=yes')) {
+        html(response, '<main><h1>Welcome to Aeolus</h1><p>Signed in as probe@mail.test.</p></main>');
+      } else {
+        response.writeHead(302, { location: '/sign-in' }).end();
+      }
+    } else if (request.url === '/account') {
+      if (request.headers.cookie?.includes('signed-in=yes') && world.needsTerms) {
+        response.writeHead(302, { location: '/welcome' }).end();
+      } else if (request.headers.cookie?.includes('signed-in=yes')) {
+        html(response, world.accountHome);
+      } else {
+        response.writeHead(302, { location: '/sign-in' }).end();
+      }
     } else if (request.url === '/organisation/fleets') {
       html(response, `<button onclick="location='${consoleApp.origin}/'">Open in console</button>`);
     } else {
@@ -110,6 +134,80 @@ function reset(): void {
   Object.assign(world, worldAtStart());
   inbox.splice(0, inbox.length);
 }
+
+test('mail sign-in ends on the protected account home, not Bridge', { timeout: 30_000 }, async () => {
+  reset();
+  const context = fresh();
+  try {
+    assert.deepEqual(await evaluate({ ...accountSignIn, timeoutMs: 6_000 }, context, timing), { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' });
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('mail sign-in chooses the configured probe organisation before checking its home', { timeout: 30_000 }, async () => {
+  reset();
+  world.chooseOrganisation = true;
+  const context = fresh({ PROBE_ORGANISATION: 'Status probe' });
+  try {
+    assert.deepEqual(await evaluate({ ...accountSignIn, timeoutMs: 6_000 }, context, timing), { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' });
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('mail sign-in succeeds at authenticated terms, with dependent pages not checked', { timeout: 30_000 }, async () => {
+  reset();
+  world.chooseOrganisation = true;
+  world.needsTerms = true;
+  const context = fresh({ PROBE_ORGANISATION: 'Status probe' });
+  try {
+    assert.deepEqual(await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing), { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' });
+    for (const check of [consoleOverview, bridge, aeolusApp]) {
+      const outcome = await evaluate(check, context, timing);
+      assert.ok(outcome instanceof NotChecked);
+      assert.equal(outcome.message, 'the probe must accept the account terms before these pages can be checked');
+    }
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('a configured organisation absent from the chooser fails explicitly', { timeout: 30_000 }, async () => {
+  reset();
+  world.chooseOrganisation = true;
+  const context = fresh({ PROBE_ORGANISATION: 'Missing organisation' });
+  try {
+    assert.deepEqual(await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing), { state: 'down', detail: 'the configured probe organisation was not offered' });
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('an organisation chooser without probe configuration is not a product outage', { timeout: 30_000 }, async () => {
+  reset();
+  world.chooseOrganisation = true;
+  const context = fresh();
+  try {
+    const outcome = await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing);
+    assert.ok(outcome instanceof NotChecked);
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('a mailed link that leaves the probe signed out is still down', { timeout: 30_000 }, async () => {
+  reset();
+  world.redeemLink = false;
+  const context = fresh();
+  try {
+    const outcome = await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing);
+    assert.ok('state' in outcome);
+    assert.equal(outcome.state, 'down');
+  } finally {
+    await closeSession(context);
+  }
+});
 
 test('with everything healthy the sign-in, console, Bridge and app are up', { timeout: 120_000 }, async () => {
   reset();

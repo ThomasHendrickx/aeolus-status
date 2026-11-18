@@ -20,6 +20,8 @@ export interface Session {
   context: BrowserContext;
   /** How long the sign-in mail took to arrive, in milliseconds. */
   mailMs: number;
+  /** A signed-in probe whose terms need consent cannot open the dependent app pages yet. */
+  needsTerms: boolean;
 }
 
 const sessions = new WeakMap<Context, Session>();
@@ -49,13 +51,37 @@ async function signIn(context: Context, signal: AbortSignal): Promise<Session> {
     const mailMs = context.now() - asked;
     try {
       await page.goto(link);
-      await page.waitForURL((url) => url.origin === new URL(urlOf(context, 'gateway')).origin && url.pathname === '/bridge');
-    } catch {
+      const home = page.getByRole('heading', { name: 'Home', exact: true });
+      const signedInTerms = page.getByText(/^Signed in as /);
+      const chooseOrganisation = page.getByRole('heading', { name: 'Choose your organisation', exact: true });
+      await home.or(signedInTerms).or(chooseOrganisation).first().waitFor();
+      if (await chooseOrganisation.isVisible()) {
+        const organisation = context.env.PROBE_ORGANISATION;
+        if (!organisation) {
+          throw new NotChecked('the probe organisation is not configured');
+        }
+        const choice = page.getByRole('button', { name: organisation, exact: true });
+        if (await choice.count() !== 1) {
+          throw new Failure('the configured probe organisation was not offered');
+        }
+        await choice.click();
+      }
+      await page.waitForURL((url) => url.origin === new URL(account).origin && ['/account', '/welcome'].includes(url.pathname));
+      if (new URL(page.url()).pathname === '/welcome') {
+        await signedInTerms.waitFor();
+      } else {
+        await home.waitFor();
+      }
+    } catch (error) {
+      if (error instanceof NotChecked || error instanceof Failure) {
+        throw error;
+      }
       throw new Failure('the sign-in link did not sign in');
     }
+    const needsTerms = new URL(page.url()).pathname === '/welcome';
     await page.close();
     signal.removeEventListener('abort', close);
-    return { browser, context: browserContext, mailMs };
+    return { browser, context: browserContext, mailMs, needsTerms };
   } catch (error) {
     signal.removeEventListener('abort', close);
     await browser.close().catch(() => undefined);
@@ -76,6 +102,9 @@ export function sessionOrNotChecked(context: Context): Session {
   const opened = sessions.get(context);
   if (!opened) {
     throw new NotChecked('the probe is not signed in, see the sign-in check');
+  }
+  if (opened.needsTerms) {
+    throw new NotChecked('the probe must accept the account terms before these pages can be checked');
   }
   return opened;
 }
