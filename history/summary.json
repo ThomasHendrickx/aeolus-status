@@ -149,18 +149,18 @@
     "icon": "https://icons.duckduckgo.com/ip3/api.github.com.ico",
     "slug": "check-fleet-round-trip",
     "status": "degraded",
-    "uptime": "97.34%",
-    "uptimeDay": "97.34%",
-    "uptimeWeek": "97.34%",
-    "uptimeMonth": "97.34%",
-    "uptimeYear": "97.34%",
+    "uptime": "96.31%",
+    "uptimeDay": "96.31%",
+    "uptimeWeek": "96.31%",
+    "uptimeMonth": "96.31%",
+    "uptimeYear": "96.31%",
     "time": 359,
     "timeDay": 359,
     "timeWeek": 359,
     "timeMonth": 359,
     "timeYear": 359,
     "dailyMinutesDown": {
-      "2026-11-18": 27
+      "2026-11-18": 37
     }
   },
   {
@@ -277,11 +277,11 @@
     "icon": "https://icons.duckduckgo.com/ip3/api.github.com.ico",
     "slug": "check-account-sign-in",
     "status": "up",
-    "uptime": "95.66%",
-    "uptimeDay": "95.66%",
-    "uptimeWeek": "95.66%",
-    "uptimeMonth": "95.66%",
-    "uptimeYear": "95.66%",
+    "uptime": "95.71%",
+    "uptimeDay": "95.71%",
+    "uptimeWeek": "95.71%",
+    "uptimeMonth": "95.71%",
+    "uptimeYear": "95.71%",
     "time": 324,
     "timeDay": 324,
     "timeWeek": 324,
@@ -297,18 +297,18 @@
     "icon": "https://icons.duckduckgo.com/ip3/api.github.com.ico",
     "slug": "check-console",
     "status": "degraded",
-    "uptime": "65.11%",
-    "uptimeDay": "65.11%",
-    "uptimeWeek": "65.11%",
-    "uptimeMonth": "65.11%",
-    "uptimeYear": "65.11%",
+    "uptime": "64.42%",
+    "uptimeDay": "64.42%",
+    "uptimeWeek": "64.42%",
+    "uptimeMonth": "64.42%",
+    "uptimeYear": "64.42%",
     "time": 271,
     "timeDay": 271,
     "timeWeek": 271,
     "timeMonth": 271,
     "timeYear": 271,
     "dailyMinutesDown": {
-      "2026-11-18": 342
+      "2026-11-18": 352
     }
   },
   {
@@ -334,17 +334,19 @@
     "url": "https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-app&state=open",
     "icon": "https://icons.duckduckgo.com/ip3/api.github.com.ico",
     "slug": "check-app",
-    "status": "up",
-    "uptime": "100.00%",
-    "uptimeDay": "100.00%",
-    "uptimeWeek": "100.00%",
-    "uptimeMonth": "100.00%",
-    "uptimeYear": "100.00%",
-    "time": 297,
-    "timeDay": 297,
-    "timeWeek": 297,
-    "timeMonth": 297,
-    "timeYear": 297,
-    "dailyMinutesDown": {}
+    "status": "degraded",
+    "uptime": "99.87%",
+    "uptimeDay": "99.87%",
+    "uptimeWeek": "99.87%",
+    "uptimeMonth": "99.87%",
+    "uptimeYear": "99.87%",
+    "time": 315,
+    "timeDay": 315,
+    "timeWeek": 315,
+    "timeMonth": 315,
+    "timeYear": 315,
+    "dailyMinutesDown": {
+      "2026-11-18": 1
+    }
   }
 ]
