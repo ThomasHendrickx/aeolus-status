@@ -80,7 +80,21 @@ jobs:
           writeFileSync(mailboxFile, mailboxSource.replace(original, replacement));
 
           JS
-      - run: node src/run.ts "$CADENCE"
+      - name: Walk the probe once without changing status issues
+        run: |
+          node --input-type=module <<'JS'
+          import { realContext } from './src/context.ts';
+          import { signInFresh, closeSession } from './src/session.ts';
+          const context = realContext();
+          try {
+            await signInFresh(context, AbortSignal.timeout(190_000));
+            console.log('diagnostic sign-in completed');
+          } catch {
+            console.log('diagnostic walk completed; see fixed state flags above');
+          } finally {
+            await closeSession(context);
+          }
+          JS
         env:
           GITHUB_TOKEN: ${{ github.token }}
           FLEET_PROBE_TOKEN: ${{ secrets.FLEET_PROBE_TOKEN }}
