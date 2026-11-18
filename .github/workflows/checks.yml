@@ -35,6 +35,33 @@ jobs:
           cache-dependency-path: checks/package-lock.json
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Diagnose sign-in destination without private data
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const file = 'src/session.ts';
+          const source = readFileSync(file, 'utf8');
+          const diagnostic = `
+                const here = new URL(page.url());
+                console.log('sign-in diagnostic', JSON.stringify({
+                  accountOrigin: here.origin === new URL(account).origin,
+                  accountHome: here.pathname === '/account',
+                  bridge: here.origin === new URL(urlOf(context, 'gateway')).origin && here.pathname === '/bridge',
+                  stillOnLink: here.pathname === '/sign-in/link',
+                  askedToSignIn: here.pathname === '/sign-in',
+                  sessionCookiePresent: (await browserContext.cookies()).some(cookie => cookie.name === 'aeolus_account_session'),
+                  failedNotice: await page.getByText('We couldn’t sign you in', { exact: true }).count(),
+                  chooseOrganisation: await page.getByRole('heading', { name: 'Choose your organisation', exact: true }).count(),
+                }));
+                await page.goto(account + '/account');
+                console.log('protected account diagnostic', JSON.stringify({
+                  stayedOnAccount: new URL(page.url()).pathname === '/account',
+                  askedToSignIn: new URL(page.url()).pathname === '/sign-in',
+                  status: await page.locator('main').count(),
+                }));
+          `;
+          writeFileSync(file, source.replace("throw new Failure('the sign-in link did not sign in');", diagnostic + "throw new Failure('the sign-in link did not sign in');"));
+          JS
       - run: node src/run.ts "$CADENCE"
         env:
           GITHUB_TOKEN: ${{ github.token }}
