@@ -6,7 +6,7 @@ The status page of the Aeolus fleet, at [status.aeolus-fleet.dev](https://status
 
 `.upptimerc.yml` lists them, each a public URL, checked every 5 minutes by `Uptime CI`. The rows named for a check of `checks/` read that check's status issue (open when it is down or degraded) instead of a URL of the part, so the page shows what the check found; `checks/` runs them and opens and closes the issues. The fleet read check calls the fleet as a read-only probe ship, its crew token kept in the Actions secret `FLEET_PROBE_TOKEN`.
 
-The signed-in probe uses the Actions secrets `PROBE_MAIL_ADDRESS` and `PROBE_MAIL_PASSWORD`. When its email belongs to several organisations, set the repository variable `PROBE_ORGANISATION` to the exact name of the organisation containing the probe fleet. The check chooses that organisation and verifies the protected account home; a missing choice configuration is not reported as a product outage.
+The signed-in probe uses the Actions secrets `PROBE_MAIL_ADDRESS` and `PROBE_MAIL_PASSWORD`. When its email belongs to several organisations, set the repository variable `PROBE_ORGANISATION` to the exact name of the organisation containing the probe fleet. The check chooses that organisation and verifies the protected account home or the authenticated terms page; a missing choice configuration is not reported as a product outage. When the probe must accept terms, mail sign-in can pass, while dependent page checks remain not checked until that setup is complete.
 
 ## Incidents
 
