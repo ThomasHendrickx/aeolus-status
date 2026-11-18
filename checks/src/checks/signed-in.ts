@@ -4,7 +4,7 @@ import { loadWithAssets, PAGE_BUDGET_MS } from '../browser.ts';
 import type { Context } from '../context.ts';
 import { probe } from '../fleet.ts';
 import { sessionOrNotChecked, signInFresh, urlOf } from '../session.ts';
-import { type Check, Failure, type Outcome } from '../types.ts';
+import { type Check, Failure, type Outcome, NotChecked } from '../types.ts';
 
 /** The sign-in check's try: its mail may take up to 2.5 minutes (over 2 is degraded), and the page steps on each side of it 20 seconds. The checks that use the session keep the 30 seconds. */
 const SIGN_IN_TIMEOUT_MS = 200_000;
@@ -83,10 +83,17 @@ export const consoleOverview: Check<Context> = {
   session: 'uses',
   run: (context, signal) => inSession(context, signal, async (page) => {
     try {
-      await page.goto(`${urlOf(context, 'account')}/organisation/fleets`);
-      await page.getByRole('button', { name: 'Open in console' }).click();
+      await page.goto(`${urlOf(context, 'account')}/account`, { waitUntil: 'networkidle' });
+      await page.getByRole('heading', { name: 'Home', exact: true }).waitFor();
+      const openConsole = page.getByRole('button', { name: 'Open console', exact: true });
+      // A member's loaded fleet list deliberately omits this action without an allowance.
+      if (await page.getByRole('heading', { name: 'Your fleets', exact: true }).isVisible() && await openConsole.count() === 0) {
+        throw new NotChecked('the probe account has no console allowance');
+      }
+      await openConsole.first().click();
       await page.waitForURL((url) => url.pathname === '/' && url.origin !== new URL(urlOf(context, 'account')).origin);
-    } catch {
+    } catch (error) {
+      if (error instanceof NotChecked) throw error;
       throw new Failure('the account app did not open the console');
     }
     const took = await openSigned(page, page.url());
@@ -118,7 +125,15 @@ export const aeolusApp: Check<Context> = {
     }
     try {
       await page.goto(`${app}/sign-in/start`);
-      await page.getByTestId('sign-in-continue').click();
+      const signedIn = (url: URL): boolean => url.origin === new URL(app).origin && !url.pathname.startsWith('/sign-in');
+      // Ordinary browsers advance automatically; the home-screen welcome may still offer Continue.
+      try { await page.waitForURL(signedIn, { timeout: 2_000 }); } catch {
+        const continueButton = page.getByTestId('sign-in-continue');
+        if (await continueButton.isVisible() && await continueButton.isEnabled()) {
+          // Automatic navigation can finish between observing and clicking the button.
+          await continueButton.click({ timeout: 2_000 }).catch(() => undefined);
+        }
+      }
       await page.waitForURL((url) => url.origin === new URL(app).origin && !url.pathname.startsWith('/sign-in'));
     } catch {
       throw new Failure('the app did not sign the probe in');
