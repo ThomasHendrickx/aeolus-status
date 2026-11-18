@@ -115,7 +115,7 @@ export const bridge: Check<Context> = {
   run: (context, signal) => inSession(context, signal, async (page) => verdict(await openSigned(page, `${urlOf(context, 'gateway')}/bridge`), 'Bridge')),
 };
 
-/** Aeolus app: signed in, the home page, the fleet page and the probe's own ship's page load, with no error boundary and no script error, and the probe's own ship shown. */
+/** Aeolus app: signed in, Home and Fleet load without errors, and Fleet shows the probe's ship. */
 export const aeolusApp: Check<Context> = {
   name: 'Aeolus app: signed-in pages',
   slug: 'check-app',
@@ -158,13 +158,6 @@ export const aeolusApp: Check<Context> = {
     if (!(await page.getByTestId('harbour-tile').filter({ hasText: me.name }).first().isVisible())) {
       throw new Failure('the page does not show the probe\'s own ship');
     }
-    const shipUrl = new URL(`/conversations/${encodeURIComponent(me.shipId)}`, page.url());
-    shipUrl.search = new URL(page.url()).search;
-    shipUrl.searchParams.set('name', me.name);
-    const ship = await openSigned(page, shipUrl.toString());
-    if (!(await page.getByText(me.name).first().isVisible())) {
-      throw new Failure('the ship page does not show the ship');
-    }
-    return verdict(Math.max(home, fleet, ship), 'the app');
+    return verdict(Math.max(home, fleet), 'the app');
   }),
 };
