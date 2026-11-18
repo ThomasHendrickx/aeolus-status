@@ -1,7 +1,7 @@
 url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-squadrons&state=open
 status: up
 code: 200
-responseTime: 206
-lastUpdated: 2026-11-18T01:57:38.159Z
+responseTime: 279
+lastUpdated: 2026-11-18T04:02:11.953Z
 startTime: 2026-11-18T01:57:37.951Z
 generator: Upptime <https://github.com/upptime/upptime>
