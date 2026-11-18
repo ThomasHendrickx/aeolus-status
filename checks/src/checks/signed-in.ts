@@ -16,12 +16,12 @@ const ERROR_SHOWN_CSS = '[data-testid="page-did-not-open-try-again"], [data-test
 const ERROR_SHOWN_TEXT = /This page did not open|Application error|Something went wrong/;
 
 /** Opens a page as the probe account does and fails on a script error, an error page, or an assertion; returns how long the load took. */
-async function openSigned(page: Page, url: string): Promise<number> {
+async function openSigned(page: Page, url: string, consoleTiming = false): Promise<number> {
   let scriptErrors = 0;
   page.on('pageerror', () => {
     scriptErrors += 1;
   });
-  const took = await loadWithAssets(page, url);
+  const took = await loadWithAssets(page, url, { consoleTiming });
   if (new URL(page.url()).pathname.startsWith('/sign-in')) {
     throw new Failure('the page asked the signed-in probe to sign in again');
   }
@@ -88,7 +88,7 @@ export const consoleOverview: Check<Context> = {
   cadence: 'fifteen',
   session: 'uses',
   run: (context, signal) => inSession(context, signal, async (page) => {
-    const took = await openSigned(page, urlOf(context, 'console'));
+    const took = await openSigned(page, urlOf(context, 'console'), true);
     const current = new URL(page.url());
     if (current.origin === new URL(urlOf(context, 'account')).origin && current.pathname === '/account') {
       await page.getByRole('heading', { name: 'Home', exact: true }).waitFor();

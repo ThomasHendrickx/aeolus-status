@@ -45,7 +45,7 @@ export class AssetFailure extends Failure {
  * Loads a page and checks rendering resources and linked icons or manifests, excluding background requests.
  * Failure details omit URL credentials and query strings. Returns the milliseconds the load took.
  */
-export async function loadWithAssets(page: Page, url: string): Promise<number> {
+export async function loadWithAssets(page: Page, url: string, options: { consoleTiming?: boolean; now?: () => number } = {}): Promise<number> {
   const failedUrls = new Map<string, string>();
   const rendering = new Set(['document', 'script', 'stylesheet', 'image', 'font']);
   page.on('response', (response) => {
@@ -62,12 +62,35 @@ export async function loadWithAssets(page: Page, url: string): Promise<number> {
     }
   });
   const started = Date.now();
+  const now = options.now ?? Date.now;
+  const timingStarted = now();
+  const requests: { path: string; duration: number }[] = [];
+  if (options.consoleTiming) {
+    page.on('requestfinished', (request) => {
+      const timing = request.timing();
+      if (timing.responseEnd < 0) return;
+      const segments = new URL(request.url()).pathname.split('/');
+      // Only known route components are safe: even a short unknown segment can be a token.
+      const safe = new Set(['', 'api', 'v1', 'fleet', 'ships', 'ship', 'whoami', 'list', '_next', 'static', 'chunks', 'css']);
+      const path = segments.map((segment) => safe.has(segment) ? segment : '[redacted]').join('/');
+      requests.push({ path, duration: Math.round(timing.responseEnd) });
+    });
+    void page.locator('[data-testid="harbour-tile"], a[href^="/ships/"]').first().waitFor({ timeout: 10_000 })
+      .then(() => console.log(`Console first ship visible: ${String(now() - timingStarted)} ms`))
+      .catch(() => undefined);
+  }
   try {
     await page.goto(url, { waitUntil: 'networkidle' });
   } catch {
     throw new Failure('the page did not load');
   }
   const took = Date.now() - started;
+  if (options.consoleTiming) {
+    console.log(`Console network idle: ${String(now() - timingStarted)} ms`);
+    for (const request of requests.sort((a, b) => b.duration - a.duration).slice(0, 5)) {
+      console.log(`Console request ${request.path}: ${String(request.duration)} ms`);
+    }
+  }
   const linked = await page.locator('link[rel~="icon"], link[rel="apple-touch-icon"], link[rel="manifest"]').evaluateAll((links) => links.map((link) => (link as HTMLLinkElement).href));
   for (const icon of linked) {
     const response = await page.request.get(icon);
