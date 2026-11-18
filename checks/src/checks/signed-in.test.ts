@@ -6,7 +6,7 @@ import { after, before, test } from 'node:test';
 import type { Context } from '../context.ts';
 import { evaluate } from '../engine.ts';
 import { inOrder } from '../order.ts';
-import { closeSession, signInFresh } from '../session.ts';
+import { acceptsProbeTerms, closeSession, signInFresh } from '../session.ts';
 import { NotChecked } from '../types.ts';
 import { accountSignIn, aeolusApp, bridge, consoleOverview } from './signed-in.ts';
 
@@ -121,7 +121,7 @@ before(async () => {
     }
   });
   servers = [mail.server, gateway.server, consoleApp.server, app.server, account.server, fleet.server];
-  env = { PROBE_MAIL_ADDRESS: PROBE, PROBE_MAIL_PASSWORD: 'p', MAIL_API: mail.origin, ACCOUNT_URL: account.origin, GATEWAY_URL: gateway.origin, CONSOLE_URL: consoleApp.origin, APP_URL: app.origin, MAIL_WAIT_MS: '1500', FLEET_URL: fleet.origin, FLEET_PROBE_TOKEN: 'x' };
+  env = { GITHUB_REF: 'refs/heads/main', PROBE_MAIL_ADDRESS: PROBE, PROBE_MAIL_PASSWORD: 'p', MAIL_API: mail.origin, ACCOUNT_URL: account.origin, GATEWAY_URL: gateway.origin, CONSOLE_URL: consoleApp.origin, APP_URL: app.origin, MAIL_WAIT_MS: '1500', FLEET_URL: fleet.origin, FLEET_PROBE_TOKEN: 'x' };
 });
 after(() => {
   for (const server of servers) {
@@ -146,6 +146,31 @@ function reset(): void {
   Object.assign(world, worldAtStart());
   inbox.splice(0, inbox.length);
 }
+
+test('branch runs skip signed-in checks without touching the account or mailbox', async () => {
+  reset();
+  inbox.push({ id: 'scheduled', text: 'scheduled sign-in mail' });
+  for (const ref of ['refs/heads/feature', 'refs/pull/30/merge', 'refs/tags/main', '']) {
+    let requests = 0;
+    const context = fresh({ GITHUB_REF: ref, ACCEPT_PROBE_TERMS: 'true' });
+    context.fetch = (() => { requests += 1; throw new Error('unexpected request'); }) as typeof fetch;
+    for (const check of [accountSignIn, consoleOverview, bridge, aeolusApp]) {
+      const outcome = await evaluate(check, context, timing);
+      assert.ok(outcome instanceof NotChecked);
+      assert.equal(outcome.message, 'branch run');
+    }
+    assert.equal(requests, 0);
+    assert.deepEqual(inbox, [{ id: 'scheduled', text: 'scheduled sign-in mail' }]);
+  }
+});
+
+test('terms input is honoured only on main', () => {
+  assert.equal(acceptsProbeTerms(fresh({ GITHUB_REF: 'refs/heads/main', ACCEPT_PROBE_TERMS: 'true' })), true);
+  assert.equal(acceptsProbeTerms(fresh({ GITHUB_REF: 'refs/heads/main', ACCEPT_PROBE_TERMS: 'false' })), false);
+  for (const ref of ['refs/heads/feature', 'refs/pull/30/merge', 'refs/tags/main', '']) {
+    assert.equal(acceptsProbeTerms(fresh({ GITHUB_REF: ref, ACCEPT_PROBE_TERMS: 'true' })), false);
+  }
+});
 
 test('mail sign-in ends on the protected account home, not Bridge', { timeout: 30_000 }, async () => {
   reset();
