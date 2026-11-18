@@ -6,6 +6,7 @@
  */
 import { realContext } from './context.ts';
 import { evaluate } from './engine.ts';
+import { isDry } from './dry.ts';
 import { type Github, syncIssue } from './issues.ts';
 import { inOrder } from './order.ts';
 import { closeSession } from './session.ts';
@@ -13,7 +14,7 @@ import { checks } from './registry.ts';
 import { type Cadence, NotChecked, Unconfigured } from './types.ts';
 
 const cadence = process.argv[2] as Cadence | undefined;
-const dry = process.argv.includes('--dry');
+const dry = isDry(process.env.GITHUB_REF, process.argv.includes('--dry'));
 if (cadence !== 'five' && cadence !== 'fifteen') {
   throw new Error('Usage: node src/run.ts <five|fifteen> [--dry]');
 }
