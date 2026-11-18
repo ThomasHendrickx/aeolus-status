@@ -32,12 +32,20 @@ export const fleetRoundTrip: Check<Context> = {
   async run(context, signal) {
     const started = context.now();
     const fleet = probe(context, signal);
-    const me = (await fleet.call('GET', '/ship/whoami')) as { shipId?: string };
+    const call = async (method: 'GET' | 'POST', path: string, body?: unknown): Promise<unknown> => {
+      const callStarted = context.now();
+      try {
+        return await fleet.call(method, path, body);
+      } finally {
+        console.log(`Fleet round trip ${path.slice('/ship/'.length)}: ${String(context.now() - callStarted)} ms`);
+      }
+    };
+    const me = (await call('GET', '/ship/whoami')) as { shipId?: string };
     if (!me.shipId) {
       throw new Failure('the probe could not be identified');
     }
     const nonce = `status-check ${context.now()}-${Math.random().toString(36).slice(2)}`;
-    await fleet.call('POST', '/ship/send', {
+    await call('POST', '/ship/send', {
       selector: { kind: 'ship', shipId: me.shipId },
       payload: nonce,
       contentType: 'text/plain',
@@ -45,10 +53,10 @@ export const fleetRoundTrip: Check<Context> = {
       idempotencyKey: nonce.replaceAll(' ', '-'),
     });
     for (let poll = 0; poll < POLLS; poll += 1) {
-      const answer = (await fleet.call('POST', '/ship/receive', { max: 10 })) as { deliveries?: { deliveryId: string; payload: string }[] };
+      const answer = (await call('POST', '/ship/receive', { max: 10 })) as { deliveries?: { deliveryId: string; payload: string }[] };
       const mine = (answer.deliveries ?? []).filter((delivery) => delivery.payload.startsWith('status-check '));
       for (const delivery of mine) {
-        await fleet.call('POST', '/ship/ack', { deliveryId: delivery.deliveryId });
+        await call('POST', '/ship/ack', { deliveryId: delivery.deliveryId });
       }
       if (mine.some((delivery) => delivery.payload === nonce)) {
         const took = context.now() - started;
