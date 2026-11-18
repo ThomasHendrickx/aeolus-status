@@ -106,7 +106,7 @@ before(async () => {
       if (request.headers.cookie?.includes('signed-in=yes') && world.needsTerms) {
         response.writeHead(302, { location: '/welcome' }).end();
       } else if (request.headers.cookie?.includes('signed-in=yes')) {
-        html(response, (world.consoleAllowed ? `<nav data-testid="app-switcher"><button data-testid="app-switcher-apps" onclick="document.getElementById('apps').hidden=false">Account</button><div id="apps" hidden><a data-testid="app-switcher-app" href="${world.consoleHandoffBroken ? '/account' : consoleApp.origin + '/?fleet=flt_probe'}">Console</a></div></nav>` : '') + world.accountHome + (world.accountEmptyState ? '<div data-testid="account-no-fleet">Your organisation has no fleet now.</div>' : `<section aria-labelledby="home-fleets"><h2 id="home-fleets">Your fleets</h2><ul>${world.accountFleet ? '<li>Example fleet</li>' : ''}</ul></section>`));
+        html(response, (world.consoleAllowed ? `<nav data-testid="app-switcher"><button data-testid="app-switcher-apps" onclick="document.getElementById('apps').hidden=false">Account</button><div id="apps" hidden><a data-testid="app-switcher-app" href="${world.consoleHandoffBroken ? '/account' : consoleApp.origin + '/?fleet=flt_probe'}">Console</a></div></nav>` : '<p data-testid="app-switcher">Example / Account</p>') + world.accountHome + (world.accountEmptyState ? '<div data-testid="account-no-fleet">Your organisation has no fleet now.</div>' : `<section aria-labelledby="home-fleets"><h2 id="home-fleets">Your fleets</h2><ul>${world.accountFleet ? '<li>Example fleet</li>' : ''}</ul></section>`));
       } else {
         response.writeHead(302, { location: '/sign-in' }).end();
       }
@@ -371,6 +371,7 @@ test('without the probe mailbox nothing is checked', async () => {
 test('a probe without an openable fleet is not checked, never down', { timeout: 15000 }, async () => {
   reset();
   world.consoleAllowed = false;
+  world.accountFleet = true;
   const result = await run({ ...consoleOverview, timeoutMs: 6000 });
   assert.ok(result instanceof NotChecked);
   assert.equal(result.message, 'the probe account has no openable fleet');
