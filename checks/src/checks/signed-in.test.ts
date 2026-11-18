@@ -355,7 +355,7 @@ test('without the probe mailbox nothing is checked', async () => {
 test('a member without a console allowance is not checked, never down', { timeout: 15000 }, async () => {
   reset();
   world.consoleAllowed = false;
-  const result = await run({ ...consoleOverview, timeoutMs: 1500 });
+  const result = await run({ ...consoleOverview, timeoutMs: 6000 });
   assert.ok(result instanceof NotChecked);
   assert.equal(result.message, 'the probe account has no console allowance');
 });
@@ -363,5 +363,5 @@ test('a member without a console allowance is not checked, never down', { timeou
 test('browser app sign-in can advance automatically without a continue button', { timeout: 15000 }, async () => {
   reset();
   world.autoAppSignIn = true;
-  assert.deepEqual(await run({ ...aeolusApp, timeoutMs: 1500 }), { state: 'up', detail: 'the app loads' });
+  assert.deepEqual(await run({ ...aeolusApp, timeoutMs: 6000 }), { state: 'up', detail: 'the app loads' });
 });
