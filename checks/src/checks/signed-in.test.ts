@@ -385,5 +385,6 @@ test('app returning to Account after losing sign-in is still down', { timeout: 2
   world.appEndsSession = true;
   const result = await run({ ...aeolusApp, timeoutMs: 6000 });
   assert.ok(!(result instanceof NotChecked));
+  assert.ok(typeof result === 'object' && result !== null && 'state' in result);
   assert.equal(result.state, 'down');
 });
