@@ -27,6 +27,14 @@ export interface Session {
 
 const sessions = new WeakMap<Context, Session>();
 
+export function acceptsProbeTerms(context: Context): boolean {
+  return context.env.GITHUB_REF === 'refs/heads/main' && context.env.ACCEPT_PROBE_TERMS === 'true';
+}
+
+function requireMain(context: Context): void {
+  if (context.env.GITHUB_REF !== 'refs/heads/main') throw new NotChecked('branch run');
+}
+
 /** Signs in as a person does: asks for a link on the account app's sign-in page, reads it from the probe mailbox, opens it. Stops when the signal aborts. */
 async function signIn(context: Context, signal: AbortSignal): Promise<Session> {
   const inbox = mailbox(context);
@@ -70,7 +78,7 @@ async function signIn(context: Context, signal: AbortSignal): Promise<Session> {
       await page.waitForURL((url) => url.origin === new URL(account).origin && ['/account', '/welcome'].includes(url.pathname));
       if (new URL(page.url()).pathname === '/welcome') {
         await signedInTerms.waitFor();
-        if (context.env.ACCEPT_PROBE_TERMS === 'true') {
+        if (acceptsProbeTerms(context)) {
           await page.getByRole('checkbox', { name: /I accept/ }).check();
           await page.getByRole('button', { name: 'Continue', exact: true }).click();
           await page.waitForURL((url) => url.origin === new URL(account).origin && url.pathname === '/account');
@@ -98,6 +106,7 @@ async function signIn(context: Context, signal: AbortSignal): Promise<Session> {
 
 /** Signs the probe in anew and keeps the session for the checks that use it, closing the one before. A failed sign-in keeps none. */
 export async function signInFresh(context: Context, signal: AbortSignal): Promise<Session> {
+  requireMain(context);
   await closeSession(context);
   const opened = await signIn(context, signal);
   sessions.set(context, opened);
@@ -106,6 +115,7 @@ export async function signInFresh(context: Context, signal: AbortSignal): Promis
 
 /** For a check that uses the session but did not open it: without one the sign-in check's failure stands for it, so this one is not checked. */
 export function sessionOrNotChecked(context: Context): Session {
+  requireMain(context);
   const opened = sessions.get(context);
   if (!opened) {
     throw new NotChecked('the probe is not signed in, see the sign-in check');
