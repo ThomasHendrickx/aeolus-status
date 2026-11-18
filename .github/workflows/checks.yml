@@ -41,3 +41,4 @@ jobs:
           FLEET_PROBE_TOKEN: ${{ secrets.FLEET_PROBE_TOKEN }}
           PROBE_MAIL_ADDRESS: ${{ secrets.PROBE_MAIL_ADDRESS }}
           PROBE_MAIL_PASSWORD: ${{ secrets.PROBE_MAIL_PASSWORD }}
+          PROBE_ORGANISATION: ${{ vars.PROBE_ORGANISATION }}

@@ -49,8 +49,22 @@ async function signIn(context: Context, signal: AbortSignal): Promise<Session> {
     const mailMs = context.now() - asked;
     try {
       await page.goto(link);
-      await page.waitForURL((url) => url.origin === new URL(urlOf(context, 'gateway')).origin && url.pathname === '/bridge');
-    } catch {
+      const home = page.getByRole('heading', { name: 'Home', exact: true });
+      const chooseOrganisation = page.getByRole('heading', { name: 'Choose your organisation', exact: true });
+      await home.or(chooseOrganisation).first().waitFor();
+      if (await chooseOrganisation.isVisible()) {
+        const organisation = context.env.PROBE_ORGANISATION;
+        if (!organisation) {
+          throw new NotChecked('the probe organisation is not configured');
+        }
+        await page.getByRole('button', { name: organisation, exact: true }).click();
+      }
+      await page.waitForURL((url) => url.origin === new URL(account).origin && url.pathname === '/account');
+      await home.waitFor();
+    } catch (error) {
+      if (error instanceof NotChecked) {
+        throw error;
+      }
       throw new Failure('the sign-in link did not sign in');
     }
     await page.close();
