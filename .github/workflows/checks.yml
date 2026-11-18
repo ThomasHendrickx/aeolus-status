@@ -12,6 +12,10 @@ on:
         type: boolean
         required: true
         default: false
+      diagnose_app:
+        description: "Record fixed app sign-in destination flags without private page data"
+        type: boolean
+        default: false
       cadence:
         description: "five or fifteen"
         required: true
@@ -40,8 +44,37 @@ jobs:
           cache-dependency-path: checks/package-lock.json
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: node src/run.ts "$CADENCE"
+      - run: |
+          if [ "$DIAGNOSE_APP" != true ]; then
+            node src/run.ts "$CADENCE"
+          else
+            node --input-type=module <<'JS'
+          import { realContext } from './src/context.ts';
+          import { signInFresh, closeSession, urlOf } from './src/session.ts';
+          const context = realContext();
+          try {
+            const session = await signInFresh(context, AbortSignal.timeout(200000));
+            const page = await session.context.newPage();
+            let completedAppHandoffs = 0;
+            page.on('response', r => {
+              const u = new URL(r.url());
+              if (u.origin === new URL(urlOf(context, 'app')).origin && u.pathname === '/sign-in/done' && r.status() === 302) completedAppHandoffs++;
+            });
+            await page.goto(`${urlOf(context, 'app')}/sign-in/start`);
+            try { await page.waitForURL(u => u.origin === new URL(urlOf(context, 'app')).origin && !u.pathname.startsWith('/sign-in'), {timeout: 20000}); } catch {}
+            const u = new URL(page.url());
+            console.log('app diagnostic: completed handoffs=' + completedAppHandoffs);
+            console.log('app diagnostic: returned to account home=' + (u.origin === new URL(urlOf(context, 'account')).origin && u.pathname === '/account'));
+            console.log('app diagnostic: reached app page=' + (u.origin === new URL(urlOf(context, 'app')).origin && !u.pathname.startsWith('/sign-in')));
+            console.log('app diagnostic: app failure page=' + (u.origin === new URL(urlOf(context, 'app')).origin && u.pathname === '/sign-in/failed'));
+            console.log('app diagnostic: account Home heading=' + await page.getByRole('heading', {name:'Home', exact:true}).count());
+            console.log('app diagnostic: account member fleet heading=' + await page.getByRole('heading', {name:'Your fleets', exact:true}).count());
+          } catch { console.log('app diagnostic: session or navigation failed'); process.exitCode = 1; }
+          finally { await closeSession(context); }
+          JS
+          fi
         env:
+          DIAGNOSE_APP: ${{ inputs.diagnose_app && 'true' || 'false' }}
           GITHUB_TOKEN: ${{ github.token }}
           FLEET_PROBE_TOKEN: ${{ secrets.FLEET_PROBE_TOKEN }}
           PROBE_MAIL_ADDRESS: ${{ secrets.PROBE_MAIL_ADDRESS }}
