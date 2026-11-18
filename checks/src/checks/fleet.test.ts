@@ -158,3 +158,18 @@ test('squadrons and the watch plugin: seen is up, not seen is down', async () =>
   const stale = healthy().map((s) => (s.type === 'watch' ? { ...s, lastSeenAt: ago(30) } : s));
   assert.equal((await evaluate(watch, context(listing(stale)), timing) as { state: string }).state, 'down');
 });
+
+test('the round trip logs every call duration without credentials or payloads', async () => {
+  const logs: string[] = [];
+  const original = console.log;
+  console.log = (message: string) => { logs.push(message); };
+  try {
+    assert.deepEqual(await evaluate(fleetRoundTrip, roundTrip({ deliver: true, slow: 100 }), timing), { state: 'up', detail: 'a message sent, received and acknowledged' });
+  } finally {
+    console.log = original;
+  }
+  for (const name of ['whoami', 'send', 'receive', 'ack']) {
+    assert.ok(logs.some((line) => line.includes(`${name}: 100 ms`)), name);
+  }
+  assert.doesNotMatch(logs.join('\n'), /secret|shp_probe|status-check/);
+});
