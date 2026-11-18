@@ -57,12 +57,16 @@ async function signIn(context: Context, signal: AbortSignal): Promise<Session> {
         if (!organisation) {
           throw new NotChecked('the probe organisation is not configured');
         }
-        await page.getByRole('button', { name: organisation, exact: true }).click();
+        const choice = page.getByRole('button', { name: organisation, exact: true });
+        if (await choice.count() !== 1) {
+          throw new Failure('the configured probe organisation was not offered');
+        }
+        await choice.click();
       }
       await page.waitForURL((url) => url.origin === new URL(account).origin && url.pathname === '/account');
       await home.waitFor();
     } catch (error) {
-      if (error instanceof NotChecked) {
+      if (error instanceof NotChecked || error instanceof Failure) {
         throw error;
       }
       throw new Failure('the sign-in link did not sign in');
