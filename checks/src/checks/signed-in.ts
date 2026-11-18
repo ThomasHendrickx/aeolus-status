@@ -125,7 +125,9 @@ export const aeolusApp: Check<Context> = {
     }
     try {
       await page.goto(`${app}/sign-in/start`);
-      const signedIn = (url: URL): boolean => url.origin === new URL(app).origin && !url.pathname.startsWith('/sign-in');
+      const account = new URL(urlOf(context, 'account')).origin;
+      const accountHome = (url: URL): boolean => url.origin === account && url.pathname === '/account';
+      const signedIn = (url: URL): boolean => (url.origin === new URL(app).origin && !url.pathname.startsWith('/sign-in')) || accountHome(url);
       // Ordinary browsers advance automatically; the home-screen welcome may still offer Continue.
       try { await page.waitForURL(signedIn, { timeout: 2_000 }); } catch {
         const continueButton = page.getByTestId('sign-in-continue');
@@ -134,8 +136,16 @@ export const aeolusApp: Check<Context> = {
           await continueButton.click({ timeout: 2_000 }).catch(() => undefined);
         }
       }
-      await page.waitForURL((url) => url.origin === new URL(app).origin && !url.pathname.startsWith('/sign-in'));
-    } catch {
+      await page.waitForURL(signedIn);
+      if (accountHome(new URL(page.url()))) {
+        // The gateway sends a signed-in account with no openable fleet back to Account.
+        // Require its protected home and loaded fleet section, not a signed-out redirect.
+        await page.getByRole('heading', { name: 'Home', exact: true }).waitFor();
+        await page.getByRole('heading', { name: /^Your (?:fleets|organisation’s fleets)$/ }).waitFor();
+        throw new NotChecked('the probe account has no openable fleet');
+      }
+    } catch (error) {
+      if (error instanceof NotChecked) throw error;
       throw new Failure('the app did not sign the probe in');
     }
     const home = await openSigned(page, `${app}/`);
