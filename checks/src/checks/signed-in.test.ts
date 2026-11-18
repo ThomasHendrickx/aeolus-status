@@ -26,7 +26,7 @@ const html = (response: ServerResponse, body: string, status = 200): void => {
 const tile = '<div data-testid="harbour-tile">a ship</div>';
 const probeTile = '<div data-testid="harbour-tile">probe-ship</div>';
 const shipPage = '<main><p data-testid="conversation-start">The start of your conversation with probe-ship</p></main>';
-const worldAtStart = () => ({ mail: true, autoAppSignIn: false, consoleAllowed: true, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
+const worldAtStart = () => ({ mail: true, autoAppSignIn: false, appNoFleet: false, appEndsSession: false, consoleAllowed: true, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
 const world = worldAtStart();
 let servers: Server[] = [];
 let env: Record<string, string> = {};
@@ -59,6 +59,10 @@ before(async () => {
   const app = await listen((request, response) => {
     const path = request.url?.split('?')[0];
     if (path === '/sign-in/start') {
+      if (world.appNoFleet) {
+        response.writeHead(302, { location: `${account.origin}/account`, ...(world.appEndsSession ? { 'set-cookie': 'signed-in=; Path=/; Max-Age=0' } : {}) }).end();
+        return;
+      }
       if (world.autoAppSignIn) { response.writeHead(302, { location: '/' }).end(); return; }
       html(response, '<button data-testid="sign-in-continue" onclick="location=\'/\'">Sign in</button>');
     } else if (path === '/fleet') {
@@ -364,4 +368,22 @@ test('browser app sign-in can advance automatically without a continue button', 
   reset();
   world.autoAppSignIn = true;
   assert.deepEqual(await run({ ...aeolusApp, timeoutMs: 6000 }), { state: 'up', detail: 'the app loads' });
+});
+
+
+test('app returning to authenticated Account without an openable fleet is not checked', { timeout: 15000 }, async () => {
+  reset();
+  world.appNoFleet = true;
+  const result = await run({ ...aeolusApp, timeoutMs: 6000 });
+  assert.ok(result instanceof NotChecked);
+  assert.equal(result.message, 'the probe account has no openable fleet');
+});
+
+test('app returning to Account after losing sign-in is still down', { timeout: 20000 }, async () => {
+  reset();
+  world.appNoFleet = true;
+  world.appEndsSession = true;
+  const result = await run({ ...aeolusApp, timeoutMs: 6000 });
+  assert.ok(!(result instanceof NotChecked));
+  assert.equal(result.state, 'down');
 });
