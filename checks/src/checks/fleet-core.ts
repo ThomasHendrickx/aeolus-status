@@ -30,7 +30,6 @@ export const fleetRoundTrip: Check<Context> = {
   slug: 'check-fleet-round-trip',
   cadence: 'five',
   async run(context, signal) {
-    const started = context.now();
     const fleet = probe(context, signal);
     const call = async (method: 'GET' | 'POST', path: string, body?: unknown): Promise<unknown> => {
       const callStarted = context.now();
@@ -45,6 +44,7 @@ export const fleetRoundTrip: Check<Context> = {
       throw new Failure('the probe could not be identified');
     }
     const nonce = `status-check ${context.now()}-${Math.random().toString(36).slice(2)}`;
+    const started = context.now();
     await call('POST', '/ship/send', {
       selector: { kind: 'ship', shipId: me.shipId },
       payload: nonce,
@@ -55,11 +55,11 @@ export const fleetRoundTrip: Check<Context> = {
     for (let poll = 0; poll < POLLS; poll += 1) {
       const answer = (await call('POST', '/ship/receive', { max: 10 })) as { deliveries?: { deliveryId: string; payload: string }[] };
       const mine = (answer.deliveries ?? []).filter((delivery) => delivery.payload.startsWith('status-check '));
+      const took = context.now() - started;
       for (const delivery of mine) {
         await call('POST', '/ship/ack', { deliveryId: delivery.deliveryId });
       }
       if (mine.some((delivery) => delivery.payload === nonce)) {
-        const took = context.now() - started;
         return took > SLOW_MS
           ? { state: 'degraded', detail: `the message round trip took ${String(Math.round(took / 100) / 10)} s` }
           : { state: 'up', detail: 'a message sent, received and acknowledged' };
