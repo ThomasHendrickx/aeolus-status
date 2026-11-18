@@ -50,7 +50,8 @@ before(async () => {
     }
   });
   const gateway = await listen((_, response) => html(response, world.bridgePage));
-  const consoleApp = await listen((_, response) => {
+  const consoleApp = await listen((request, response) => {
+    if (request.url === '/background') { setTimeout(() => response.end('done'), 5_200); return; }
     if (!world.consoleAllowed) response.writeHead(302, { location: `${account.origin}/account` }).end();
     else if (world.consoleHandoffBroken) response.writeHead(302, { location: `${account.origin}/sign-in` }).end();
     else html(response, world.consolePage);
@@ -284,6 +285,20 @@ test('with everything healthy the sign-in, console, Bridge and app are up', { ti
   } finally {
     await closeSession(context);
   }
+});
+
+test('console budget measures the first visible ship even when background work continues', { timeout: 30_000 }, async () => {
+  reset();
+  world.consolePage = `<main>${tile}<script>fetch('/background')</script></main>`;
+  assert.deepEqual(await run(consoleOverview), { state: 'up', detail: 'the console loads' });
+});
+
+test('console is degraded when the first ship appears after five seconds', { timeout: 30_000 }, async () => {
+  reset();
+  world.consolePage = `<main><script>setTimeout(() => { document.querySelector('main').innerHTML = '${tile}'; }, 5200)</script></main>`;
+  const result = await run(consoleOverview) as { state: string; detail: string };
+  assert.equal(result.state, 'degraded');
+  assert.match(result.detail, /^the console took [0-9]+(?:\.[0-9]+)? s to load$/);
 });
 
 test('a probe mailbox that answers 429 a few times is waited for, and the sign-in is up', { timeout: 120_000 }, async () => {

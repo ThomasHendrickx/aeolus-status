@@ -45,7 +45,7 @@ export class AssetFailure extends Failure {
  * Loads a page and checks rendering resources and linked icons or manifests, excluding background requests.
  * Failure details omit URL credentials and query strings. Returns the milliseconds the load took.
  */
-export async function loadWithAssets(page: Page, url: string, options: { consoleTiming?: boolean; now?: () => number } = {}): Promise<number> {
+export async function loadWithAssets(page: Page, url: string, options: { consoleTiming?: boolean; onShipTiming?: (timing: Promise<number | undefined>) => void; now?: () => number } = {}): Promise<number> {
   const failedUrls = new Map<string, string>();
   const rendering = new Set(['document', 'script', 'stylesheet', 'image', 'font']);
   page.on('response', (response) => {
@@ -75,9 +75,14 @@ export async function loadWithAssets(page: Page, url: string, options: { console
       const path = segments.map((segment) => safe.has(segment) ? segment : '[redacted]').join('/');
       requests.push({ path, duration: Math.round(timing.responseEnd) });
     });
-    void page.locator('[data-testid="harbour-tile"], a[href^="/ships/"]').first().waitFor({ timeout: 10_000 })
-      .then(() => console.log(`Console first ship visible: ${String(now() - timingStarted)} ms`))
+    const visibility = page.locator('[data-testid="harbour-tile"], a[href^="/ships/"]').first().waitFor({ timeout: 0 })
+      .then(() => {
+        const took = now() - timingStarted;
+        console.log(`Console first ship visible: ${String(took)} ms`);
+        return took;
+      })
       .catch(() => undefined);
+    options.onShipTiming?.(visibility);
   }
   try {
     await page.goto(url, { waitUntil: 'networkidle' });
