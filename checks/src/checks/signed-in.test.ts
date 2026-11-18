@@ -153,7 +153,9 @@ test('a mailed link that leaves the probe signed out is still down', { timeout: 
   world.redeemLink = false;
   const context = fresh();
   try {
-    assert.equal((await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing)).state, 'down');
+    const outcome = await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing);
+    assert.ok('state' in outcome);
+    assert.equal(outcome.state, 'down');
   } finally {
     await closeSession(context);
   }
