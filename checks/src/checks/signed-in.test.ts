@@ -26,7 +26,7 @@ const html = (response: ServerResponse, body: string, status = 200): void => {
 const tile = '<div data-testid="harbour-tile">a ship</div>';
 const probeTile = '<div data-testid="harbour-tile">probe-ship</div>';
 const shipPage = '<main><p data-testid="conversation-start">The start of your conversation with probe-ship</p></main>';
-const worldAtStart = () => ({ mail: true, autoAppSignIn: false, appNoFleet: false, appEndsSession: false, accountFleet: false, accountEmptyState: false, consoleAllowed: true, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
+const worldAtStart = () => ({ mail: true, acceptEmail: true, autoAppSignIn: false, appNoFleet: false, appEndsSession: false, accountFleet: false, accountEmptyState: false, consoleAllowed: true, chooseOrganisation: false, redeemLink: true, needsTerms: false, accountHome: '<main><h1>Home</h1><h2>Your account</h2></main>', consolePage: `<main>${tile}</main>`, bridgePage: '<main><h1>Bridge</h1></main>', homePage: '<main><h1>Home</h1></main>', fleetPage: `<main data-testid="fleet">${probeTile}</main>`, shipPage });
 const world = worldAtStart();
 let servers: Server[] = [];
 let env: Record<string, string> = {};
@@ -75,12 +75,13 @@ before(async () => {
   });
   const account = await listen((request, response) => {
     if (request.url === '/sign-in') {
-      html(response, `<h1>Sign in</h1><label for="e">Email</label><input id="e"><button onclick="fetch('/ask').then(()=>{document.body.innerHTML='<h1>Check your mail</h1>'})">Email me a link</button>`);
-    } else if (request.url === '/ask') {
-      if (world.mail) {
+      html(response, `<h1>Sign in</h1><form action="/ask"><label for="e">Email</label><input id="e" name="email" type="email" required><button>Continue</button></form>`);
+    } else if (request.url?.startsWith('/ask?')) {
+      const email = new URL(request.url, account.origin).searchParams.get('email');
+      if (world.acceptEmail && email === PROBE && world.mail) {
         inbox.push({ id: '1', text: `Your link: ${account.origin}/link?token=a&amp;b=1 thanks` });
       }
-      html(response, 'ok');
+      html(response, world.acceptEmail && email === PROBE ? '<h1>Check your mail</h1>' : '<h1>Could not send mail</h1>');
     } else if (request.url?.startsWith('/link')) {
       if (!world.redeemLink) {
         response.writeHead(302, { location: '/sign-in' }).end();
@@ -148,6 +149,18 @@ test('mail sign-in ends on the protected account home, not Bridge', { timeout: 3
   const context = fresh();
   try {
     assert.deepEqual(await evaluate({ ...accountSignIn, timeoutMs: 6_000 }, context, timing), { state: 'up', detail: 'a sign-in link mailed and followed to a signed-in page' });
+  } finally {
+    await closeSession(context);
+  }
+});
+
+test('a sign-in page that does not accept the email reports down', { timeout: 30_000 }, async () => {
+  reset();
+  world.acceptEmail = false;
+  const context = fresh();
+  try {
+    const { tryOnce } = await import('../engine.ts');
+    assert.deepEqual(await tryOnce(accountSignIn, context, 25_000), { state: 'down', detail: 'the sign-in page did not take an email' });
   } finally {
     await closeSession(context);
   }
