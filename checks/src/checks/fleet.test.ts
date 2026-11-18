@@ -24,7 +24,7 @@ const healthy = (): ListedShip[] => [
 ];
 
 /** A fleet that answers by path; `clock` advances `slow` ms per request. */
-function context(answers: Record<string, (body: Record<string, unknown>) => unknown>, options: { token?: string; slow?: number } = {}): Context & { seen: string[] } {
+function context(answers: Record<string, (body: Record<string, unknown>) => unknown>, options: { token?: string; slow?: number; durations?: Record<string, number> } = {}): Context & { seen: string[] } {
   let now = NOW;
   const seen: string[] = [];
   return {
@@ -34,7 +34,7 @@ function context(answers: Record<string, (body: Record<string, unknown>) => unkn
     fetch: ((url: string, init?: RequestInit) => {
       const path = String(url).replace('https://fleet.aeolus-fleet.dev/api/v1', ''); // privacy-guard: allow ssh-alias
       seen.push(`${init?.method ?? 'GET'} ${path} ${init?.headers ? (init.headers as Record<string, string>).authorization : ''}`);
-      now += options.slow ?? 0;
+      now += options.durations?.[path] ?? options.slow ?? 0;
       const answer = answers[path];
       if (!answer) {
         return Promise.resolve(new Response('', { status: 404 }));
@@ -80,18 +80,18 @@ test('the fleet list: reads every page', async () => {
   assert.equal((await evaluate(fleetList, ctx, timing) as { state: string }).state, 'up');
 });
 
-function roundTrip(options: { deliver: boolean; slow?: number }): Context & { seen: string[] } {
+function roundTrip(options: { deliver: boolean; slow?: number; durations?: Record<string, number>; fail?: string }): Context & { seen: string[] } {
   let nonce = '';
   return context({
-    '/ship/whoami': () => ({ shipId: 'shp_probe' }),
+    '/ship/whoami': () => options.fail === 'whoami' ? new Response('', { status: 500 }) : ({ shipId: 'shp_probe' }),
     '/ship/send': (body) => {
       nonce = String(body.payload);
       assert.deepEqual(body.selector, { kind: 'ship', shipId: 'shp_probe' });
       return { messageId: 'msg_1' };
     },
     '/ship/receive': () => ({ deliveries: options.deliver ? [{ deliveryId: 'dlv_1', payload: nonce }] : [] }),
-    '/ship/ack': () => ({}),
-  }, { slow: options.slow });
+    '/ship/ack': () => options.fail === 'ack' ? new Response('', { status: 500 }) : ({}),
+  }, { slow: options.slow, durations: options.durations });
 }
 
 test('the round trip: the probe sends itself a message, receives it and acks it', async () => {
@@ -100,8 +100,18 @@ test('the round trip: the probe sends itself a message, receives it and acks it'
   assert.deepEqual(ctx.seen.map((line) => line.split(' ').slice(0, 2).join(' ')), ['GET /ship/whoami', 'POST /ship/send', 'POST /ship/receive', 'POST /ship/ack']);
 });
 
-test('the round trip: over 2 s is degraded; a message that never arrives is down', async () => {
-  assert.equal((await evaluate(fleetRoundTrip, roundTrip({ deliver: true, slow: 800 }), timing) as { state: string }).state, 'degraded');
+test('the round trip: only send through receive counts toward the 2 s budget', async () => {
+  assert.equal((await evaluate(fleetRoundTrip, roundTrip({ deliver: true, slow: 800 }), timing) as { state: string }).state, 'up');
+  const durations = { '/ship/whoami': 1_000, '/ship/send': 1_000, '/ship/receive': 1_000, '/ship/ack': 1_000 };
+  assert.equal((await evaluate(fleetRoundTrip, roundTrip({ deliver: true, durations }), timing) as { state: string }).state, 'up');
+  durations['/ship/receive'] += 1;
+  assert.equal((await evaluate(fleetRoundTrip, roundTrip({ deliver: true, durations }), timing) as { state: string }).state, 'degraded');
+});
+
+test('the round trip: whoami and ack must succeed; a message that never arrives is down', async () => {
+  for (const fail of ['whoami', 'ack']) {
+    assert.equal((await evaluate(fleetRoundTrip, roundTrip({ deliver: true, fail }), timing) as { state: string }).state, 'down');
+  }
   const lost = await evaluate(fleetRoundTrip, roundTrip({ deliver: false }), { ...timing, timeoutMs: 15_000 });
   assert.deepEqual(lost, { state: 'down', detail: 'the probe did not receive its own message' });
 });
