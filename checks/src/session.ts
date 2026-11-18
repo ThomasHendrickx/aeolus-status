@@ -69,6 +69,12 @@ async function signIn(context: Context, signal: AbortSignal): Promise<Session> {
       await page.waitForURL((url) => url.origin === new URL(account).origin && ['/account', '/welcome'].includes(url.pathname));
       if (new URL(page.url()).pathname === '/welcome') {
         await signedInTerms.waitFor();
+        if (context.env.ACCEPT_PROBE_TERMS === 'true') {
+          await page.getByRole('checkbox', { name: /I accept/ }).check();
+          await page.getByRole('button', { name: 'Continue', exact: true }).click();
+          await page.waitForURL((url) => url.origin === new URL(account).origin && url.pathname === '/account');
+          await home.waitFor();
+        }
       } else {
         await home.waitFor();
       }
