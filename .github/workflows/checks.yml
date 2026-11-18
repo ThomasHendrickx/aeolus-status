@@ -40,7 +40,27 @@ jobs:
           cache-dependency-path: checks/package-lock.json
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: node src/run.ts "$CADENCE"
+      - run: |
+          node --input-type=module <<'JS'
+          import { realContext } from './src/context.ts';
+          import { signInFresh, closeSession, urlOf } from './src/session.ts';
+          const context = realContext();
+          try {
+            const session = await signInFresh(context, AbortSignal.timeout(200000));
+            const page = await session.context.newPage();
+            await page.goto(`${urlOf(context, 'account')}/organisation/fleets`);
+            console.log('diagnostic: organisation fleet page offered console buttons=' + await page.getByRole('button', {name: 'Open in console', exact: true}).count());
+            console.log('diagnostic: organisation fleet page not found=' + await page.getByText('This page could not be found.', {exact: true}).count());
+            await page.goto(`${urlOf(context, 'app')}/sign-in/start`);
+            try { await page.waitForURL(u => u.origin === new URL(urlOf(context, 'app')).origin && !u.pathname.startsWith('/sign-in'), {timeout: 20000}); } catch {}
+            const u = new URL(page.url());
+            console.log('diagnostic: app signed-in destination=' + (u.origin === new URL(urlOf(context, 'app')).origin && !u.pathname.startsWith('/sign-in')));
+            console.log('diagnostic: app sign-in failure page=' + (u.pathname === '/sign-in/failed'));
+            console.log('diagnostic: account organisation chooser=' + await page.getByRole('heading', {name:'Choose your organisation', exact:true}).count());
+            console.log('diagnostic: app sign-in continue buttons=' + await page.getByTestId('sign-in-continue').count());
+          } catch { console.log('diagnostic: session or navigation failed'); process.exitCode = 1; }
+          finally { await closeSession(context); }
+          JS
         env:
           GITHUB_TOKEN: ${{ github.token }}
           FLEET_PROBE_TOKEN: ${{ secrets.FLEET_PROBE_TOKEN }}
