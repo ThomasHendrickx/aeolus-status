@@ -10,14 +10,36 @@ concurrency:
 permissions:
   contents: write
   issues: write
+  actions: read
 jobs:
   run:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.11.1"
+      - name: Identify UTC slot
+        id: slot
+        run: node checks/scripts/slot.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: done
+        with:
+          path: .status-slot
+          key: status-slot-uptime-${{ github.ref }}-${{ steps.slot.outputs.key }}
       - uses: upptime/uptime-monitor@74f0683383384927e064d76a5f21f340d6af36fc # v1.46.5
+        if: steps.done.outputs.cache-hit != 'true'
         with:
           command: "update"
         env:
           GH_PAT: ${{ github.token }}
           FLEET_PROBE_TOKEN: ${{ secrets.FLEET_PROBE_TOKEN }}
+      - run: mkdir -p .status-slot && touch .status-slot/done
+        if: steps.done.outputs.cache-hit != 'true'
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: steps.done.outputs.cache-hit != 'true'
+        with:
+          path: .status-slot
+          key: status-slot-uptime-${{ github.ref }}-${{ steps.slot.outputs.key }}
