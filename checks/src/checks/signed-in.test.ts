@@ -148,6 +148,18 @@ test('mail sign-in chooses the configured probe organisation before checking its
   }
 });
 
+test('an organisation chooser without probe configuration is not a product outage', { timeout: 30_000 }, async () => {
+  reset();
+  world.chooseOrganisation = true;
+  const context = fresh();
+  try {
+    const outcome = await evaluate({ ...accountSignIn, timeoutMs: 2_000 }, context, timing);
+    assert.ok(outcome instanceof NotChecked);
+  } finally {
+    await closeSession(context);
+  }
+});
+
 test('a mailed link that leaves the probe signed out is still down', { timeout: 30_000 }, async () => {
   reset();
   world.redeemLink = false;
