@@ -5,6 +5,8 @@ import { slotKey } from './slot.ts';
 
 test('setup twice creates the same three probe-owned fallback schedules', async () => {
   const stored = new Map<string, Record<string, any>>();
+  const old = new Set(['old-five', 'old-fifteen']);
+  const cancelled: string[] = [];
   const calls: string[] = [];
   const call = async (_method: string, path: string, body?: any): Promise<any> => {
     calls.push(path);
@@ -12,6 +14,8 @@ test('setup twice creates the same three probe-owned fallback schedules', async 
     if (path === '/ship/send') return { messageId: 'preflight' };
     if (path === '/ship/receiveReply') return { deliveries: [{ deliveryId: 'reply', payload: JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ method: 'run_workflow', dispatch: { status_code: 204, ref: 'main' } }) }] }) }] };
     if (path === '/ship/ack') return {};
+    if (path === '/ship/schedules') return { items: [...old].map((scheduleId) => ({ scheduleId, contentType: 'application/vnd.aeolus.mcp-tool+json; name=actions_run_trigger', selector: { kind: 'ship', name: 'github-actions' }, timing: { kind: 'cron', cron: scheduleId === 'old-five' ? '2-59/5 * * * *' : '2-59/15 * * * *' } })), nextCursor: null };
+    if (path === '/ship/cancelSchedule') { cancelled.push(body.scheduleId); old.delete(body.scheduleId); return {}; }
     if (path === '/ship/schedule') {
       if (!stored.has(body.idempotencyKey)) stored.set(body.idempotencyKey, body);
       else assert.deepEqual(body, stored.get(body.idempotencyKey));
@@ -22,9 +26,11 @@ test('setup twice creates the same three probe-owned fallback schedules', async 
   const first = await setupTimer(call);
   assert.deepEqual(await setupTimer(call), first);
   assert.equal(stored.size, 3);
+  assert.deepEqual(cancelled, ['old-five', 'old-fifteen']);
+  assert.ok([...stored.keys()].every((key) => key.endsWith('-v2')));
   assert.ok(calls.indexOf('/ship/ack') < calls.indexOf('/ship/schedule'));
   const schedules = [...stored.values()];
-  assert.deepEqual(schedules.map((s) => s.timing.cron), ['2-59/5 * * * *', '2-59/5 * * * *', '2-59/15 * * * *']);
+  assert.deepEqual(schedules.map((s) => s.timing.cron), ['7 * * * *', '17 * * * *', '27 * * * *']);
   assert.deepEqual(schedules.map((s) => JSON.parse(s.payload)), [
     { method: 'run_workflow', owner: 'ThomasHendrickx', repo: 'aeolus-status', ref: 'main', workflow_id: 'uptime.yml', inputs: {} },
     ...['five', 'fifteen'].map((cadence) => ({ method: 'run_workflow', owner: 'ThomasHendrickx', repo: 'aeolus-status', ref: 'main', workflow_id: 'checks.yml', inputs: { cadence, accept_probe_terms: false } })),
