@@ -1,7 +1,7 @@
 url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-trierarchs&state=open
 status: up
 code: 200
-responseTime: 353
-lastUpdated: 2026-11-18T04:02:11.655Z
+responseTime: 201
+lastUpdated: 2026-11-19T03:58:37.859Z
 startTime: 2026-11-18T01:57:37.475Z
 generator: Upptime <https://github.com/upptime/upptime>
