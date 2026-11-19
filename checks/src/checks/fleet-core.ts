@@ -54,12 +54,12 @@ export const fleetRoundTrip: Check<Context> = {
     });
     for (let poll = 0; poll < POLLS; poll += 1) {
       const answer = (await call('POST', '/ship/receive', { max: 10 })) as { deliveries?: { deliveryId: string; payload: string }[] };
-      const mine = (answer.deliveries ?? []).filter((delivery) => delivery.payload.startsWith('status-check '));
+      const deliveries = answer.deliveries ?? [];
       const took = context.now() - started;
-      for (const delivery of mine) {
+      for (const delivery of deliveries) {
         await call('POST', '/ship/ack', { deliveryId: delivery.deliveryId });
       }
-      if (mine.some((delivery) => delivery.payload === nonce)) {
+      if (deliveries.some((delivery) => delivery.payload === nonce)) {
         return took > SLOW_MS
           ? { state: 'degraded', detail: `the message round trip took ${String(Math.round(took / 100) / 10)} s` }
           : { state: 'up', detail: 'a message sent, received and acknowledged' };
