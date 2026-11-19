@@ -27,7 +27,7 @@ export function probe(context: Context, signal: AbortSignal): {
   }
   const base = `${context.env.FLEET_URL ?? DEFAULT_FLEET}/api/v1`;
   async function call(method: 'GET' | 'POST', path: string, body?: unknown): Promise<unknown> {
-    const response = await context.fetch(`${base}${path}`, {
+    const response = await (context.fleetFetch ?? context.fetch)(`${base}${path}`, {
       method,
       signal,
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },

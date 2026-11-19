@@ -35,6 +35,11 @@ export async function tryOnce<Context>(check: Check<Context>, context: Context, 
     if (timedOut) {
       return { state: 'down', detail: `no answer within ${String(timeoutMs / 1000)} seconds` };
     }
+    if (!(error instanceof Failure) && !(error instanceof AssetFailure)) {
+      const type = error instanceof TypeError ? 'TypeError' : error instanceof RangeError ? 'RangeError' : error instanceof SyntaxError ? 'SyntaxError' : error instanceof ReferenceError ? 'ReferenceError' : error instanceof Error ? 'Error' : 'UnknownError';
+      const message = error instanceof Error && ['fetch failed', 'socket hang up', 'network error'].includes(error.message) ? error.message : 'message withheld';
+      console.error(`Check ${check.slug}: ${type}: ${message}`);
+    }
     return { state: 'down', detail: error instanceof AssetFailure ? error.message : error instanceof Failure ? publicDetail(error.message) : 'the check could not complete' };
   } finally {
     clearTimeout(timer);

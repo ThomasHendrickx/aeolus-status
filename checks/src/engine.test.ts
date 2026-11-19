@@ -67,3 +67,18 @@ test('a check whose secret is not set is not checked, and not tried again', asyn
   assert.ok((await evaluate(unset.check, null, fast)) instanceof Unconfigured);
   assert.equal(unset.calls(), 1);
 });
+
+test('unexpected exceptions are logged safely without changing the public result', async () => {
+  const logs: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => logs.push(line);
+  try {
+    assert.deepEqual(await tryOnce(check(new TypeError('fetch failed')).check, null, 50), { state: 'down', detail: 'the check could not complete' });
+    assert.deepEqual(await tryOnce(check(new Error('secret user@example.com')).check, null, 50), { state: 'down', detail: 'the check could not complete' });
+  } finally {
+    console.error = original;
+  }
+  assert.match(logs[0]!, /TypeError.*fetch failed/);
+  assert.match(logs[1]!, /Error.*withheld/);
+  assert.doesNotMatch(logs.join('\n'), /secret|user@example/);
+});
