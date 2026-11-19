@@ -100,6 +100,24 @@ test('the round trip: the probe sends itself a message, receives it and acks it'
   assert.deepEqual(ctx.seen.map((line) => line.split(' ').slice(0, 2).join(' ')), ['GET /ship/whoami', 'POST /ship/send', 'POST /ship/receive', 'POST /ship/ack']);
 });
 
+test('the round trip: acknowledges timer replies and other deliveries without treating them as its message', async () => {
+  let nonce = '';
+  const acked: unknown[] = [];
+  let polls = 0;
+  const ctx = context({
+    '/ship/whoami': () => ({ shipId: 'shp_probe' }),
+    '/ship/send': (body) => { nonce = String(body.payload); return { messageId: 'msg_1' }; },
+    '/ship/receive': () => ({ deliveries: polls++ === 0
+      ? [{ deliveryId: 'timer-reply', senderName: 'github-actions', inReplyTo: 'msg_timer', payload: '{\"result\":true}' },
+         { deliveryId: 'other', payload: 'hello' }]
+      : [{ deliveryId: 'round-trip', payload: nonce }] }),
+    '/ship/ack': (body) => { acked.push(body.deliveryId); return {}; },
+  });
+  assert.deepEqual(await evaluate(fleetRoundTrip, ctx, { ...timing, timeoutMs: 2_000 }), { state: 'up', detail: 'a message sent, received and acknowledged' });
+  assert.deepEqual(acked, ['timer-reply', 'other', 'round-trip']);
+  assert.equal(polls, 2);
+});
+
 test('the round trip: only send through receive counts toward the 2 s budget', async () => {
   assert.equal((await evaluate(fleetRoundTrip, roundTrip({ deliver: true, slow: 800 }), timing) as { state: string }).state, 'up');
   const durations = { '/ship/whoami': 1_000, '/ship/send': 1_000, '/ship/receive': 1_000, '/ship/ack': 1_000 };
