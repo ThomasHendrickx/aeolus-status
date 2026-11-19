@@ -39,16 +39,28 @@ export async function setupTimer(call: Call): Promise<string[]> {
     break;
   }
   if (!passed) throw new Error('github-actions preflight has no reply; inspect the gateway call before retrying');
+  let cursor: string | null = null;
+  do {
+    const page = await call('POST', '/ship/schedules', { ...(cursor ? { cursor } : {}) });
+    for (const schedule of page.items) {
+      if (schedule.contentType === contentType && schedule.selector?.kind === 'ship' &&
+          schedule.selector.name === 'github-actions' && schedule.timing?.kind === 'cron' &&
+          ['2-59/5 * * * *', '2-59/15 * * * *'].includes(schedule.timing.cron)) {
+        await call('POST', '/ship/cancelSchedule', { scheduleId: schedule.scheduleId });
+      }
+    }
+    cursor = page.nextCursor;
+  } while (cursor);
   const schedules = [
-    ['uptime', '2-59/5 * * * *', dispatch('uptime.yml', {})],
-    ['five', '2-59/5 * * * *', dispatch('checks.yml', { cadence: 'five', accept_probe_terms: false })],
-    ['fifteen', '2-59/15 * * * *', dispatch('checks.yml', { cadence: 'fifteen', accept_probe_terms: false })],
+    ['uptime', '7 * * * *', dispatch('uptime.yml', {})],
+    ['five', '17 * * * *', dispatch('checks.yml', { cadence: 'five', accept_probe_terms: false })],
+    ['fifteen', '27 * * * *', dispatch('checks.yml', { cadence: 'fifteen', accept_probe_terms: false })],
   ] as const;
   const ids: string[] = [];
   for (const [name, cron, payload] of schedules) {
     const { scheduleId } = await call('POST', '/ship/schedule', {
       selector: { kind: 'ship', name: 'github-actions' }, contentType,
-      payload: JSON.stringify(payload), model: 'none', idempotencyKey: `status-timer-${name}-v1`,
+      payload: JSON.stringify(payload), model: 'none', idempotencyKey: `status-timer-${name}-v2`,
       timing: { kind: 'cron', cron, timeZone: 'UTC' }, onRefused: 'skip', onMissed: 'skip', grace: 'PT1M',
     });
     ids.push(scheduleId);
