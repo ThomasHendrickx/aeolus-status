@@ -148,20 +148,20 @@
     "url": "https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-fleet-round-trip&state=open",
     "icon": "https://icons.duckduckgo.com/ip3/api.github.com.ico",
     "slug": "check-fleet-round-trip",
-    "status": "degraded",
-    "uptime": "91.67%",
-    "uptimeDay": "89.18%",
-    "uptimeWeek": "91.67%",
-    "uptimeMonth": "91.67%",
-    "uptimeYear": "91.67%",
-    "time": 326,
-    "timeDay": 330,
-    "timeWeek": 326,
-    "timeMonth": 326,
-    "timeYear": 326,
+    "status": "up",
+    "uptime": "91.57%",
+    "uptimeDay": "89.03%",
+    "uptimeWeek": "91.57%",
+    "uptimeMonth": "91.57%",
+    "uptimeYear": "91.57%",
+    "time": 324,
+    "timeDay": 328,
+    "timeWeek": 324,
+    "timeMonth": 324,
+    "timeYear": 324,
     "dailyMinutesDown": {
       "2026-11-18": 94,
-      "2026-11-19": 63
+      "2026-11-19": 65
     }
   },
   {
