@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { fleetFetch } from './network.ts';
 
 test('fleet calls log connection phases and reuse without request or response data', async () => {
-  const traceparents: (string | undefined)[] = [];
+  const traceparents: (string | string[] | undefined)[] = [];
   const server = createServer((req, res) => { traceparents.push(req.headers.traceparent); res.setHeader('content-type', 'application/json'); res.end('{"ok":true}'); });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
@@ -25,7 +25,7 @@ test('fleet calls log connection phases and reuse without request or response da
   assert.equal(logs.length, 2);
   const traceIds: string[] = [];
   for (const [index, header] of traceparents.entries()) {
-    assert.ok(header);
+    assert.ok(typeof header === 'string');
     assert.match(header, /^00-(?!0{32})[0-9a-f]{32}-(?!0{16})[0-9a-f]{16}-01$/);
     const traceId = header.split('-')[1]!;
     traceIds.push(traceId);
