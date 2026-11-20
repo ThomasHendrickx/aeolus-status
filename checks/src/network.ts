@@ -1,5 +1,6 @@
 import http from 'node:http';
 import https from 'node:https';
+import { randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import type { Socket } from 'node:net';
 import type { TLSSocket } from 'node:tls';
@@ -7,13 +8,21 @@ import type { TLSSocket } from 'node:tls';
 const httpAgent = new http.Agent({ keepAlive: true });
 const httpsAgent = new https.Agent({ keepAlive: true });
 
-/** Fleet transport. Log only timings, never the URL, headers, or bodies. */
+/** Fleet transport. Log timings and trace ID, never the URL, headers, or bodies. */
 export const fleetFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
   const secure = url.protocol === 'https:';
   const paths = ['/fleet/list', '/ship/whoami', '/ship/send', '/ship/receive', '/ship/ack'];
   const path = paths.find((item) => url.pathname.endsWith(`/api/v1${item}`)) ?? 'other';
   if (!secure && url.protocol !== 'http:') throw new TypeError('unsupported protocol');
+  const randomId = (bytes: number): string => {
+    let id: string;
+    do { id = randomBytes(bytes).toString('hex'); } while (/^0+$/.test(id));
+    return id;
+  };
+  const traceId = randomId(16);
+  const headers = new Headers(init?.headers);
+  headers.set('traceparent', `00-${traceId}-${randomId(8)}-01`);
   const started = performance.now();
   let dns: number | undefined;
   let connect: number | undefined;
@@ -25,7 +34,7 @@ export const fleetFetch: typeof fetch = async (input, init) => {
     return await new Promise<Response>((resolve, reject) => {
       const request = (secure ? https : http).request(url, {
         method: init?.method,
-        headers: Object.fromEntries(new Headers(init?.headers)),
+        headers: Object.fromEntries(headers),
         agent: secure ? httpsAgent : httpAgent,
         signal: init?.signal ?? undefined,
       }, (response) => {
@@ -50,6 +59,6 @@ export const fleetFetch: typeof fetch = async (input, init) => {
       request.end(init?.body as string | undefined);
     });
   } finally {
-    console.log(`Fleet call ${path} dns=${ms(dns)} connect=${ms(connect)} tls=${ms(tls)} ttfb=${ms(ttfb)} reused=${String(reused)}`);
+    console.log(`Fleet call ${path} dns=${ms(dns)} connect=${ms(connect)} tls=${ms(tls)} ttfb=${ms(ttfb)} reused=${String(reused)} trace_id=${traceId}`);
   }
 };
