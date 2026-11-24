@@ -1,7 +1,7 @@
 url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-bridge&state=open
-status: up
+status: degraded
 code: 200
-responseTime: 205
-lastUpdated: 2026-11-24T06:46:51.035Z
+responseTime: 390
+lastUpdated: 2026-11-24T15:08:00.730Z
 startTime: 2026-11-18T01:57:53.994Z
 generator: Upptime <https://github.com/upptime/upptime>
