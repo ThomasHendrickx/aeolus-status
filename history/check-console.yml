@@ -1,7 +1,7 @@
 url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-console&state=open
-status: up
+status: degraded
 code: 200
-responseTime: 323
-lastUpdated: 2026-11-25T05:14:24.985Z
+responseTime: 302
+lastUpdated: 2026-11-25T12:07:36.584Z
 startTime: 2026-11-18T01:57:53.529Z
 generator: Upptime <https://github.com/upptime/upptime>
