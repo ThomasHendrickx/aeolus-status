@@ -1,7 +1,7 @@
 url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-fleet-round-trip&state=open
 status: up
 code: 200
-responseTime: 209
-lastUpdated: 2026-11-24T06:46:48.796Z
+responseTime: 285
+lastUpdated: 2026-11-25T05:14:21.957Z
 startTime: 2026-11-18T01:57:37.042Z
 generator: Upptime <https://github.com/upptime/upptime>
