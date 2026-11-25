@@ -1,7 +1,7 @@
 url: https://api.github.com/repos/ThomasHendrickx/aeolus-status/issues?labels=status,check-account-page&state=open
 status: up
 code: 200
-responseTime: 210
-lastUpdated: 2026-11-24T06:46:49.820Z
+responseTime: 328
+lastUpdated: 2026-11-25T05:14:23.516Z
 startTime: 2026-11-18T01:57:38.898Z
 generator: Upptime <https://github.com/upptime/upptime>
